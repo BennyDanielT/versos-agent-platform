@@ -35,3 +35,6 @@ pgdata/
 Thumbs.db
 .idea/
 .vscode/
+
+# --- claude code local settings (per-machine) ---
+.claude/
