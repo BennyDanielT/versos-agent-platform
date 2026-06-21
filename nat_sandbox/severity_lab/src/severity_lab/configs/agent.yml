@@ -1,0 +1,24 @@
+# Human-facing ops copilot: a tool_calling_agent that DECIDES which tool to call.
+# The agent's brain (agent_llm) is separate from the triage tool's model (triage_llm).
+llms:
+  agent_llm:                       # reasoning + tool selection (needs function-calling)
+    _type: nim
+    model_name: meta/llama-3.1-8b-instruct
+    temperature: 0.0
+  triage_llm:                      # triage NEEDS reliable structured output; llama-3.1-8b
+    _type: nim                     # does it natively. (nemotron-550B is not known to support
+    model_name: meta/llama-3.1-8b-instruct   # structured output and degrades intermittently.)
+    temperature: 0.0
+
+functions:                         # the toolbox the agent may call (safe actions only)
+  triage_ticket:
+    _type: triage_ticket
+    llm_name: triage_llm
+  # review_ticket is the HUMAN's approve/reject power — deliberately NOT given to the
+  # agent. It's served to the UI separately (its own nat serve endpoint), not here.
+
+workflow:
+  _type: tool_calling_agent        # picks tools via function-calling (needs langgraph>=1.2.5)
+  llm_name: agent_llm
+  tool_names: [triage_ticket]
+  verbose: true

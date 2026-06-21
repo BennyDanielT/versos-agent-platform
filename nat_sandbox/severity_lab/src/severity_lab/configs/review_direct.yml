@@ -1,0 +1,6 @@
+# Run the review tool directly. Input is a JSON string (what the UI will POST).
+functions: {}
+
+workflow:
+  _type: review_ticket
+  # database_url defaults to the docker Postgres.

@@ -1,0 +1,37 @@
+# --- secrets (NEVER commit) ---
+.env
+.env.*
+*.env
+!*.env.example
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- NAT / runtime artifacts ---
+.tmp/
+**/.tmp/
+*.log
+
+# --- node / next.js (when the UI lands) ---
+node_modules/
+.next/
+out/
+
+# --- docker / db volumes ---
+pgdata/
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

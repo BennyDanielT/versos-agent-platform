@@ -1,0 +1,13 @@
+# Plain triage workflow — NO telemetry (the backend embeds this via load_workflow).
+# Same workflow as triage_observed.yml, minus the Phoenix tracing block.
+llms:
+  nim_llm:
+    _type: nim
+    model_name: meta/llama-3.1-8b-instruct
+    temperature: 0.0
+
+functions: {}
+
+workflow:
+  _type: triage_ticket
+  llm_name: nim_llm

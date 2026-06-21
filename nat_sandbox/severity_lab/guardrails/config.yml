@@ -1,0 +1,12 @@
+# NeMo Guardrails config (SEPARATE from NAT). Wraps our NIM model with an INPUT rail.
+# Same slot as severity_lab._screen_input, but LLM-powered: catches INTENT (novel/rephrased
+# jailbreaks, off-topic), where the regex only catches known phrases. Use both, layered.
+models:
+  - type: main
+    engine: nvidia_ai_endpoints          # NVIDIA NIM (needs NVIDIA_API_KEY)
+    model: meta/llama-3.1-8b-instruct
+
+rails:
+  input:
+    flows:
+      - self check input                 # built-in flow; prompt supplied in prompts.yml

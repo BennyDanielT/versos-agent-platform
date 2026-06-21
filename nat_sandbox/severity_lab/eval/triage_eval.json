@@ -1,0 +1,12 @@
+[
+  {"id": "1", "question": "URGENT: total data loss, my account is down and I can't access anything", "answer": "critical"},
+  {"id": "2", "question": "My exported video has no audio at all and a client meeting in 30 minutes", "answer": "high"},
+  {"id": "3", "question": "I was double charged on my invoice and want a refund", "answer": "medium"},
+  {"id": "4", "question": "Tiny typo in one subtitle, no rush at all", "answer": "low"},
+  {"id": "5", "question": "Cannot log into my account, the password reset link is broken", "answer": "high"},
+  {"id": "6", "question": "The video export is a little blurry but still usable", "answer": "low"},
+  {"id": "7", "question": "Production pipeline is completely down, no exports are processing for anyone", "answer": "critical"},
+  {"id": "8", "question": "Subtitles are slightly out of sync near the end of the video", "answer": "medium"},
+  {"id": "9", "question": "Minor cosmetic glitch in the dashboard, low priority", "answer": "low"},
+  {"id": "10", "question": "Customer's paid subscription was cancelled by mistake and they lost access", "answer": "high"}
+]

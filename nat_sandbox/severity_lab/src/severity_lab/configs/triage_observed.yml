@@ -1,0 +1,46 @@
+# The triage workflow with EVERYTHING wired in one config:
+#   `nat run`  uses the workflow (+ telemetry → Phoenix)
+#   `nat eval` additionally reads the `eval:` block at the bottom (same file).
+general:
+  telemetry:
+    logging:
+      console:
+        _type: console
+        level: INFO
+    tracing:
+      phoenix:
+        # 1.8 has no `phoenix` exporter type; use the OTLP collector exporter.
+        # NAT's otelcollector speaks OTLP HTTP, so target Phoenix's HTTP receiver
+        # at 6006/v1/traces (NOT the 4317 gRPC port).
+        _type: otelcollector
+        endpoint: http://localhost:6006/v1/traces
+        project: versos_triage
+        # Phoenix groups by the resource attribute below, not `project:` — set it so
+        # NAT's spans land in the SAME project as the OpenInference (token) spans.
+        resource_attributes:
+          openinference.project.name: versos_triage
+
+llms:
+  nim_llm:
+    _type: nim
+    # llama-3.1-8b: reliable structured output (eval needs it). Swap to
+    # nvidia/nemotron-3-ultra-550b-a55b to compare — it flakes on structured output.
+    model_name: meta/llama-3.1-8b-instruct
+    temperature: 0.0
+
+functions: {}
+
+workflow:
+  _type: triage_ticket
+  llm_name: nim_llm
+
+# Only `nat eval` reads this; `nat run` ignores it. Same workflow above is scored.
+eval:
+  general:
+    output_dir: ./.tmp/eval/
+    dataset:
+      _type: json
+      file_path: nat_sandbox/severity_lab/eval/triage_eval.json
+  evaluators:
+    severity_accuracy:
+      _type: severity_accuracy          # our custom task-specific evaluator

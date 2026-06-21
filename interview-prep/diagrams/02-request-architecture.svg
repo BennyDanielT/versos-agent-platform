@@ -1,0 +1,31 @@
+<svg width="100%" viewBox="0 0 680 500" role="img" xmlns="http://www.w3.org/2000/svg"><title>Request architecture for one triage call</title><desc>A triage request flows from Next.js to a FastAPI router to a service to the NAT triage_ticket tool. Inside the tool: screen input, assess with the LLM, decide autonomy from policy, then mask PII and log. The tool calls NIM and Postgres.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<g class="c-gray"><rect x="250" y="42" width="180" height="42" rx="6"/><text class="t" x="340" y="62" text-anchor="middle">Next.js UI</text><text class="ts" x="340" y="78" text-anchor="middle">fetch POST /triage</text></g>
+<g class="c-blue"><rect x="250" y="100" width="180" height="42" rx="6"/><text class="t" x="340" y="120" text-anchor="middle">FastAPI router</text><text class="ts" x="340" y="136" text-anchor="middle">routers/tickets.py</text></g>
+<g class="c-blue"><rect x="250" y="158" width="180" height="42" rx="6"/><text class="t" x="340" y="178" text-anchor="middle">Service layer</text><text class="ts" x="340" y="194" text-anchor="middle">services/nat_service.py</text></g>
+
+<rect x="60" y="220" width="560" height="158" rx="8" fill="none" stroke="var(--b)" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text class="th" x="80" y="240" text-anchor="start">NAT workflow · triage_ticket tool</text>
+
+<g class="c-teal"><rect x="78" y="256" width="120" height="46" rx="6"/><text class="t" x="138" y="277" text-anchor="middle">Screen input</text><text class="ts" x="138" y="293" text-anchor="middle">_screen_input</text></g>
+<g class="c-teal"><rect x="222" y="256" width="120" height="46" rx="6"/><text class="t" x="282" y="277" text-anchor="middle">Assess</text><text class="ts" x="282" y="293" text-anchor="middle">structured LLM</text></g>
+<g class="c-teal"><rect x="366" y="256" width="130" height="46" rx="6"/><text class="t" x="431" y="277" text-anchor="middle">Decide autonomy</text><text class="ts" x="431" y="293" text-anchor="middle">_decide_from_policy</text></g>
+<g class="c-teal"><rect x="222" y="320" width="274" height="44" rx="6"/><text class="t" x="359" y="340" text-anchor="middle">Mask PII + log decision</text><text class="ts" x="359" y="356" text-anchor="middle">mask_pii → INSERT triage_log</text></g>
+
+<g class="c-amber"><rect x="222" y="410" width="120" height="42" rx="6"/><text class="t" x="282" y="430" text-anchor="middle">NVIDIA NIM</text><text class="ts" x="282" y="446" text-anchor="middle">hosted LLM</text></g>
+<g class="c-amber"><rect x="376" y="410" width="120" height="42" rx="6"/><text class="t" x="436" y="430" text-anchor="middle">Postgres</text><text class="ts" x="436" y="446" text-anchor="middle">policy · log · flags</text></g>
+
+<line x1="340" y1="84" x2="340" y2="98" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="340" y1="142" x2="340" y2="156" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="340" y1="200" x2="340" y2="218" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="198" y1="279" x2="220" y2="279" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="342" y1="279" x2="364" y2="279" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="431" y1="302" x2="400" y2="318" stroke="var(--s)" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="282" y1="302" x2="282" y2="410" stroke="var(--s)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<line x1="436" y1="364" x2="436" y2="410" stroke="var(--s)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+
+<rect x="60" y="470" width="13" height="13" rx="3" class="c-blue"/><text class="ts" x="80" y="481">Backend layers</text>
+<rect x="230" y="470" width="13" height="13" rx="3" class="c-teal"/><text class="ts" x="250" y="481">Tool steps</text>
+<rect x="370" y="470" width="13" height="13" rx="3" class="c-amber"/><text class="ts" x="390" y="481">External stores</text>
+</svg>

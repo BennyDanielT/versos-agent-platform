@@ -1,0 +1,22 @@
+# --- web / api ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# --- db (async) ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+
+# --- storage ---
+boto3==1.35.92
+
+# --- agents ---
+langchain==0.3.14
+langgraph==1.2.6   # must match langchain 1.x + NAT 1.8 agents (need langgraph.runtime + ToolNode)
+langchain-nvidia-ai-endpoints
+langsmith==0.2.10
+
+# --- dev ---
+python-dotenv==1.0.1
+pytest
