@@ -172,11 +172,35 @@ export NVIDIA_API_KEY=nvapi-...      # (Windows PS:  $env:NVIDIA_API_KEY="nvapi-
 *Why:* NAT's `nim` LLM provider calls NVIDIA-hosted models; no key = no LLM calls.
 *Success:* `echo $NVIDIA_API_KEY` shows it set.
 
-**Step 1.4 — (If you need your own Postgres) start one with Docker.**
-```bash
-docker compose up -d        # using a compose file with a postgres service
+**Step 1.4 — (If you need your own Postgres) start one with Docker.** The full DEV compose
+(Postgres + Adminer). The schema mount auto-loads tables ONLY on a fresh (empty) data dir.
+```yaml
+# docker-compose.yml
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_USER: versos, POSTGRES_PASSWORD: versos, POSTGRES_DB: versos }
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./nat_sandbox/severity_lab/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U versos -d versos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  adminer:                      # clickable DB browser (Postgres has no built-in GUI)
+    image: adminer:4
+    ports: ["8081:8080"]
+    depends_on: [postgres]
+volumes:
+  pgdata:
 ```
-*Why:* a real relational store for business records (tickets, assets, findings…).
+```bash
+docker compose up -d            # starts postgres + adminer
+docker compose ps               # postgres should show "healthy"
+```
+*Why:* a real relational store for business records (tickets, findings, jobs…).
 *Success:* `docker compose ps` shows postgres healthy.
 
 **Step 1.4b — (optional) Add Adminer for a clickable DB browser.** Postgres has NO built-in
@@ -193,6 +217,8 @@ docker compose up -d adminer
 ```
 Open http://localhost:8081 → System **PostgreSQL**, Server **postgres** (the SERVICE name, NOT
 localhost — Adminer reaches Postgres over the compose network), User/Pass/DB **versos**.
+> ⚠️ **Common mistake:** typing `localhost` (or `localhost:5432`) as the Server → "connection
+> refused". Inside the Adminer container `localhost` is Adminer itself. Use **`postgres`**.
 
 ---
 

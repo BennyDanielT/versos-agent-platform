@@ -1,5 +1,15 @@
 <svg width="100%" viewBox="0 0 680 500" role="img" xmlns="http://www.w3.org/2000/svg"><title>Request architecture for one triage call</title><desc>A triage request flows from Next.js to a FastAPI router to a service to the NAT triage_ticket tool. Inside the tool: screen input, assess with the LLM, decide autonomy from policy, then mask PII and log. The tool calls NIM and Postgres.</desc>
+<style>
+  svg{--s:#8a8f98;--b:#c4c9d4;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;}
+  .t,.th{fill:#1f2330;font-weight:600;font-size:14px;stroke:none;}
+  .ts{fill:#5a6072;font-weight:400;font-size:12px;stroke:none;}
+  .c-blue{fill:#e8f0fe;stroke:#3b82f6;stroke-width:1.5;}
+  .c-teal{fill:#e3f6f3;stroke:#14b8a6;stroke-width:1.5;}
+  .c-amber{fill:#fdf0db;stroke:#f59e0b;stroke-width:1.5;}
+  .c-gray{fill:#edeef1;stroke:#9aa0aa;stroke-width:1.5;}
+</style>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="0" y="0" width="680" height="500" fill="#ffffff"/>
 
 <g class="c-gray"><rect x="250" y="42" width="180" height="42" rx="6"/><text class="t" x="340" y="62" text-anchor="middle">Next.js UI</text><text class="ts" x="340" y="78" text-anchor="middle">fetch POST /triage</text></g>
 <g class="c-blue"><rect x="250" y="100" width="180" height="42" rx="6"/><text class="t" x="340" y="120" text-anchor="middle">FastAPI router</text><text class="ts" x="340" y="136" text-anchor="middle">routers/tickets.py</text></g>

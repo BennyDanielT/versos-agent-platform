@@ -1,5 +1,15 @@
 <svg width="100%" viewBox="0 0 680 530" role="img" xmlns="http://www.w3.org/2000/svg"><title>Production deployment topology</title><desc>Next.js frontend on Vercel calls an ECS Fargate service running FastAPI plus NAT workflows, which talks to RDS Postgres, NVIDIA NIM, and Phoenix. EventBridge fires scheduled ECS task jobs that write to Postgres.</desc>
+<style>
+  svg{--s:#8a8f98;--b:#c4c9d4;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;}
+  .t,.th{fill:#1f2330;font-weight:600;font-size:14px;stroke:none;}
+  .ts{fill:#5a6072;font-weight:400;font-size:12px;stroke:none;}
+  .c-blue{fill:#e8f0fe;stroke:#3b82f6;stroke-width:1.5;}
+  .c-teal{fill:#e3f6f3;stroke:#14b8a6;stroke-width:1.5;}
+  .c-amber{fill:#fdf0db;stroke:#f59e0b;stroke-width:1.5;}
+  .c-gray{fill:#edeef1;stroke:#9aa0aa;stroke-width:1.5;}
+</style>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="0" y="0" width="680" height="530" fill="#ffffff"/>
 
 <g class="c-gray"><rect x="270" y="44" width="140" height="34" rx="6"/><text class="t" x="340" y="65" text-anchor="middle">User browser</text></g>
 <g class="c-teal"><rect x="255" y="98" width="170" height="46" rx="6"/><text class="t" x="340" y="120" text-anchor="middle">Next.js UI</text><text class="ts" x="340" y="136" text-anchor="middle">Vercel / Amplify</text></g>
