@@ -641,6 +641,64 @@ no single point of trust. Make the safety logic explicit and unit-tested.
 
 ---
 
+## INDEX-HYGIENE — second agent on the reusable spine ✅ (built)
+
+**Full vertical built** (`nat_sandbox/severity_lab/index_hygiene.py`) — the SAME spine as triage,
+re-skinned onto infra (ticket→finding, severity→risk, remediation→DDL). Hits the JD's day-one list.
+```text
+scan (deterministic catalog SQL) → risk → precision guard (index_seen observation window)
+  → autonomy gate (index_policy; DROP HARD-HELD, never auto) → human approve → apply (DDL
+  CONCURRENTLY) → efficacy (index_action_metrics: bytes_reclaimed + re_create_rate)
+```
+- Tables: `index_findings` (decision log + eval set), `index_policy` (ceiling per finding_type×risk),
+  `index_seen` (first-seen observation window), view `index_action_metrics`.
+- NAT workflow: `configs/index_hygiene.yml` (NO llms block — detection needs no LLM). `nat run … --input scan`.
+- Offline eval = precision/recall regression harness (`jobs/index_hygiene_eval.py`); demoed
+  precision 1.0 (guard on) vs 0.875 (guard off — the newborn FP). Online = `index_action_metrics`.
+- Autonomy evidence: `re_create_rate ≈ 0` over many drops is what would justify promoting
+  `unused` from suggest→approved→auto — ground truth measured from the DB, not opinion.
+- Key precision lessons learned live: "missing" only on BIG tables (small tables seq-scan anyway);
+  "unused" only after an observation WINDOW (a newborn index legitimately has 0 scans).
+
+### Catalog reference (the agent's data sources)
+
+Detection is DETERMINISTIC SQL over system views — no LLM. The views/columns to scan & monitor:
+
+| Catalog view | Key columns | What it tells you (finding) |
+|---|---|---|
+| `pg_stat_user_tables` | `seq_scan`, `idx_scan`, `n_live_tup`, `n_dead_tup` | high `seq_scan` vs `idx_scan` on a BIG table (`n_live_tup`) → **missing index**; high `n_dead_tup` → bloat/needs VACUUM |
+| `pg_stat_user_indexes` | `idx_scan`, `idx_tup_read` | `idx_scan = 0` (non-PK/unique) → **unused index** |
+| `pg_index` | `indisunique`, `indisprimary`, `indisvalid`, `indkey` | exclude PK/unique from drop; `indisvalid = false` → **invalid index**; same `indkey` on a table → **duplicate** |
+| `pg_indexes` | `indexdef` | the CREATE statement (for dup/redundancy comparison + rollback) |
+| `pg_stat_statements`* | `mean_exec_time`, `calls`, `query` | the ACTUAL **slow queries** → which column wants an index (gold source) |
+| `pg_statio_user_indexes` | `idx_blks_read`, `idx_blks_hit` | low cache-hit → index churn / IO pressure |
+| sizing fns | `pg_relation_size(oid)`, `pg_size_pretty()` | index/table **size** → feeds risk (a 2 GB unused index matters; 8 kB doesn't) |
+| bloat | `pgstattuple`* / bloat-estimate query | dead space in an index → **REINDEX** candidate |
+
+*`pg_stat_statements` / `pgstattuple` are extensions — may be absent on the box; degrade gracefully.*
+
+Quick examples:
+```sql
+-- unused (droppable) indexes, biggest first
+SELECT s.relname, s.indexrelname, s.idx_scan, pg_size_pretty(pg_relation_size(s.indexrelid))
+FROM pg_stat_user_indexes s JOIN pg_index i ON i.indexrelid=s.indexrelid
+WHERE NOT i.indisunique AND NOT i.indisprimary AND s.idx_scan=0
+ORDER BY pg_relation_size(s.indexrelid) DESC;
+
+-- missing-index candidates: big tables scanned sequentially
+SELECT relname, seq_scan, idx_scan, n_live_tup
+FROM pg_stat_user_tables WHERE seq_scan > idx_scan AND n_live_tup > 10000;
+
+-- duplicate indexes: same table + same column set
+SELECT indrelid::regclass, array_agg(indexrelid::regclass)
+FROM pg_index GROUP BY indrelid, indkey HAVING count(*) > 1;
+```
+**Precision guards:** only flag big tables for "missing" (small tables seq-scan anyway); exclude
+PK/unique from "unused"; confirm a proposed index with `EXPLAIN`/HypoPG before recommending. Risk
+= f(table rows × index size × action): CREATE = low (reversible), DROP = high (destructive, hard-held).
+
+---
+
 ## PHASE 8 — Present (the last hour) 🔜
 
 Tell the story in this order (≈3-min spine, then depth on questions):

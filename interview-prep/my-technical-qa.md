@@ -1035,3 +1035,70 @@ autonomous as evidence accumulates, with a trust layer that makes autonomy justi
 
 **One-liner:** *"I built the deep vertical (one agent, full trust layer + autonomy graduation); the
 JD wants that pattern spread across an infra fleet — which is exactly the reusable spine, re-skinned."*
+
+## Q50 — The index-hygiene agent (second agent, same spine, infra-flavored)
+
+Proof the spine generalizes: a SECOND agent built by re-skinning triage (ticket→finding,
+severity→risk, remediation→DDL). Hits the JD's literal day-one job ("missing indexes, slow queries").
+
+Pipeline (deterministic — NO LLM; detection is SQL, "pick the right layer"):
+`scan → risk → precision guard → autonomy gate → human approve → apply → efficacy`.
+- **scan**: catalog SQL finds unused / missing / duplicate / invalid indexes (pg_stat_user_indexes,
+  pg_stat_user_tables, pg_index…).
+- **precision guard**: `index_seen` observation window — a newborn index legitimately has 0 scans, so
+  flagging it is a false positive. Demoed: precision 1.0 (window on) vs 0.875 (window off).
+- **autonomy gate**: `index_policy` (finding_type×risk) + kill switch, code-enforced. **DROP is
+  HARD-HELD** — can never reach `auto` even if a policy row says so (CREATE is reversible → may auto).
+- **apply**: runs DDL `CONCURRENTLY` for approved/auto findings, records outcome.
+- **efficacy** (`index_action_metrics`): `bytes_reclaimed` + **`re_create_rate`** (dropped an index
+  then had to rebuild it = the OOPS signal). `re_create_rate ≈ 0` over many drops is the EVIDENCE
+  that justifies promoting `unused` suggest→approved→auto — ground truth measured from the DB itself,
+  not a human's opinion. Strongest possible "justifiable autonomy" story.
+- **eval**: offline = labeled precision/recall regression harness (`jobs/index_hygiene_eval.py`);
+  online = the efficacy view. Registered as a NAT workflow (`configs/index_hygiene.yml`).
+
+Files: `index_hygiene.py`, `sql/index_hygiene.sql`, `configs/index_hygiene.yml`,
+`jobs/index_hygiene_eval.py`.
+
+**One-liner:** *"Index-hygiene is triage's spine re-skinned onto Postgres catalogs: deterministic
+scan, observation-window precision guard, policy gate with DROP hard-held, apply CONCURRENTLY, and a
+re-create-rate that makes auto-drop autonomy justifiable from measured outcomes."*
+
+## Q49 — Precision, recall, accuracy, efficacy (with a worked index example)
+
+Build a **confusion matrix** first: agent flags some indexes as "unused/drop"; truth knows which are
+really unused. Example — 10 indexes, truth = 4 unused / 6 fine; agent flags 5:
+
+| | Truth: unused (4) | Truth: fine (6) |
+|---|---|---|
+| Agent flagged (5) | **TP = 3** (caught) | **FP = 2** (false alarm) |
+| Agent left alone (5) | **FN = 1** (missed) | **TN = 4** (correct) |
+
+```text
+Precision = TP / (TP + FP) = 3 / (3+2) = 0.60   "of what it flagged, how much was right" (FP = dropped a needed index)
+Recall    = TP / (TP + FN) = 3 / (3+1) = 0.75   "of all real problems, how many caught"  (FN = slow query lives on)
+Accuracy  = (TP + TN) / all = (3+4)/10 = 0.70   "of all judgments, how many correct"
+```
+
+**Why accuracy lies:** "keep everything" scores 6/10 = 0.60 accuracy while catching ZERO problems —
+because most indexes are fine (class imbalance). So lean on precision + recall, not accuracy.
+
+**The tension (tune by which mistake hurts more):**
+- DROP an index → a false positive drops a NEEDED index = disaster → optimize **precision**.
+- MISSING index → a false negative leaves a slow query in prod → optimize **recall**.
+You can't max both: flag more aggressively → recall ↑, precision ↓.
+
+**Efficacy** = different kind — it judges the ACTION's real effect, measured AFTER acting (not a
+classification metric):
+```text
+created index → query 800ms → 40ms          = high efficacy (worked)
+dropped index → 48 kB reclaimed, no slowdown = good
+dropped index → monthly report slowed → re-created = efficacy FAILURE (the "re-create rate" gate)
+```
+Precision/recall = "did it think correctly?" (judged on a labeled list). Efficacy = "did the fix
+actually help?" (judged by re-measuring the DB). Same split as offline (judge decision) vs online
+(measure outcome) evals.
+
+**One-liner:** *"Precision = right-when-it-flagged; recall = caught-of-all-real; accuracy misleads
+under class imbalance; efficacy = did the action measurably help. Tune precision for DROP, recall for
+MISSING."*

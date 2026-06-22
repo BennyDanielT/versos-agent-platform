@@ -34,11 +34,18 @@ evals, guardrails.)
 - [x] **Evals** — `nat eval` + custom `severity_accuracy` evaluator (scores the autonomy-gating
       field); golden set (10 cases) → 0.70, misses all under-rate severity. Online accept-rate via
       segment_metrics. TODO later: calibration script (raw/calibrated conf, ECE, isotonic).
-- [ ] **Guardrails** (autonomy caps ✓, approval gate ✓, kill switch; note NeMo Guardrails)
+- [x] **Guardrails** — all 7 layers built: input validate (regex), output validate, autonomy cap,
+      critical hard-hold, approval gate, kill switch (system_flags DB), NeMo input rail + Presidio
+      PII mask (integrated into the agent). Toggles are DB flags (live-flippable).
 - [~] **API integration** — production-grade LAYERED FastAPI backend DONE (backend/: main +
       core/config + db + schemas + services/ + routers/). Reads via asyncpg services, triage/ask
       via NAT in-process (isolated in nat_service), review/policy via SQL, CORS. TODO: Next.js UI + containerize.
-- [ ] **Index-hygiene agent** (deterministic pipeline: scan → find missing indexes → propose → apply)
+- [x] **Index-hygiene agent** — FULL VERTICAL on the reusable spine (index_hygiene.py):
+      scan (deterministic catalog SQL: unused/missing/duplicate/invalid) → risk → precision guard
+      (index_seen observation window) → autonomy gate (index_policy, DROP hard-held never auto) →
+      human approve → apply (DDL CONCURRENTLY) → efficacy view (bytes_reclaimed + re_create_rate).
+      Registered as a NAT workflow (configs/index_hygiene.yml, no LLM). Offline eval =
+      precision/recall harness (jobs/index_hygiene_eval.py); online = index_action_metrics view.
 - [ ] **Pipeline self-healer agent** (agent workflow: detect broken job → diagnose → fix, path varies)
 
 ## Practice / present

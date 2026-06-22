@@ -29,3 +29,4 @@ if os.getenv("PHOENIX_TRACING") == "1":
 from .severity_lab import triage_ticket_function
 from .review import review_ticket_function
 from .evals import register_severity_accuracy
+from .index_hygiene import index_hygiene_function

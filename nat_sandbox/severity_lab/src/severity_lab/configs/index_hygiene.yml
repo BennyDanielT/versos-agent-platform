@@ -1,0 +1,17 @@
+# Index-hygiene workflow. Deterministic scan — NO llms block needed (no LLM calls).
+#   nat run --config_file <this> --input "scan"
+general:
+  telemetry:
+    logging:
+      console:
+        _type: console
+        level: INFO
+
+functions: {}
+
+workflow:
+  _type: index_hygiene
+  # database_url + min_unused_age_days have sensible defaults in the config class;
+  # override here if needed, e.g.:
+  # database_url: postgresql://versos:versos@localhost:5432/versos
+  # min_unused_age_days: 7
