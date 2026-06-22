@@ -1,0 +1,15 @@
+# Pipeline self-healer workflow — a LangGraph StateGraph wrapped by NAT.
+# Deterministic diagnosis → no llms block needed.
+#   nat run --config_file <this> --input ""     (sweep all failed jobs)
+#   nat run --config_file <this> --input "2"    (heal job id 2)
+general:
+  telemetry:
+    logging:
+      console:
+        _type: console
+        level: INFO
+
+functions: {}
+
+workflow:
+  _type: pipeline_healer

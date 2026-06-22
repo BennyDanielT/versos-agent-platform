@@ -30,3 +30,4 @@ from .severity_lab import triage_ticket_function
 from .review import review_ticket_function
 from .evals import register_severity_accuracy
 from .index_hygiene import index_hygiene_function
+from .pipeline_healer import pipeline_healer_function
