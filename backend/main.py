@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.db import create_pool
-from backend.routers import agents, policy, tickets
+from backend.routers import agents, index_ops, pipeline_ops, policy, tickets
 from backend.services.nat_service import NatWorkflows
 
 
@@ -42,6 +42,8 @@ def create_app() -> FastAPI:
     app.include_router(tickets.router)
     app.include_router(policy.router)
     app.include_router(agents.router)
+    app.include_router(index_ops.router)
+    app.include_router(pipeline_ops.router)
 
     @app.get("/health", tags=["meta"])
     async def health():

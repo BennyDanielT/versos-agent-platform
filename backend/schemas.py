@@ -23,3 +23,19 @@ class PolicyReq(BaseModel):
 
 class AskReq(BaseModel):
     message: str
+
+
+# --- index-hygiene ---------------------------------------------------------
+class IndexReviewReq(BaseModel):
+    decision: str                       # approve | reject
+    reviewer: str
+    review_comment: str = ""
+
+
+class ApplyReq(BaseModel):
+    allow_auto: bool = False            # also run findings whose mode is 'auto'
+
+
+# --- pipeline healer -------------------------------------------------------
+class HealReq(BaseModel):
+    job_ref: str = ""                   # a job id as string, or "" to sweep all failed

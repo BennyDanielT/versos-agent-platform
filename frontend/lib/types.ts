@@ -53,3 +53,78 @@ export interface SegmentMetric {
 export interface AskResponse {
   answer: string;
 }
+
+export type Risk = "low" | "medium" | "high";
+
+// ---- Index hygiene (GET /index/findings) --------------------------------
+export interface IndexFinding {
+  id: number;
+  finding_type: string;               // unused | missing | duplicate | invalid
+  object_table: string;
+  object_index: string | null;
+  detail: Record<string, unknown> | null;
+  risk: Risk;
+  proposed_action: string | null;
+  rollback_action: string | null;
+  recommended_mode: AutonomyMode | null;
+  mode_reason: string | null;
+  detected_at: string;
+  decision: string | null;            // null = awaiting review
+  reviewer: string | null;
+  applied_at: string | null;
+  outcome: Record<string, unknown> | null;
+}
+
+export interface IndexMetric {
+  finding_type: string;
+  applied: number;
+  bytes_reclaimed: number;
+  re_created: number;
+  re_create_rate: number | null;
+}
+
+export interface IndexPolicyRow {
+  finding_type: string;
+  risk: Risk;
+  approved_mode: AutonomyMode;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+// ---- Pipeline healer -----------------------------------------------------
+export interface PipelineJob {
+  id: number;
+  job_name: string;
+  status: string;                     // queued | running | failed | done
+  error_class: string | null;
+  locked_by: string | null;
+  attempts: number;
+  updated_at: string;
+}
+
+// One row per healing attempt, returned by POST /pipeline/heal and GET /pipeline/heal-log.
+export interface HealResult {
+  id?: number;                        // present on heal-log rows, absent on live heal results
+  job_id: number;
+  job_name: string | null;
+  error_class: string | null;
+  diagnosis: string | null;
+  fix_type: string | null;
+  risk: Risk | null;
+  mode?: AutonomyMode | null;         // heal endpoint
+  recommended_mode?: AutonomyMode | null; // heal-log rows
+  mode_reason: string | null;
+  action_taken?: string | null;
+  outcome: string | null;             // resolved | proposed | escalated | skipped
+  attempts: number;
+  log?: string[];
+  created_at?: string;
+}
+
+export interface HealPolicyRow {
+  fix_type: string;
+  risk: Risk;
+  approved_mode: AutonomyMode;
+  updated_by: string | null;
+  updated_at: string;
+}
