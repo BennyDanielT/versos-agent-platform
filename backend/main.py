@@ -16,8 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.db import create_pool
-from backend.routers import agents, policy, tickets
+from backend.routers import agents, index_ops, pipeline_ops, policy, sim, tickets
 from backend.services.nat_service import NatWorkflows
+from backend.services.simulator import Simulator
 
 
 @asynccontextmanager
@@ -27,7 +28,11 @@ async def lifespan(app: FastAPI):
     app.state.pool = await create_pool(settings.asyncpg_dsn)
     app.state.nat = NatWorkflows()
     await app.state.nat.startup(settings.triage_config_path, settings.agent_config_path)
+    # Live data simulator (idle until /sim/start). Feeds the real pipeline, not fake rows.
+    app.state.sim = Simulator(
+        app.state.pool, settings.asyncpg_dsn, triage_getter=lambda: app.state.nat.triage)
     yield
+    await app.state.sim.stop()
     await app.state.nat.shutdown()
     await app.state.pool.close()
 
@@ -42,6 +47,9 @@ def create_app() -> FastAPI:
     app.include_router(tickets.router)
     app.include_router(policy.router)
     app.include_router(agents.router)
+    app.include_router(index_ops.router)
+    app.include_router(pipeline_ops.router)
+    app.include_router(sim.router)
 
     @app.get("/health", tags=["meta"])
     async def health():

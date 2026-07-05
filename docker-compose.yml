@@ -13,6 +13,10 @@ services:
       # Points at the TRIAGE schema (triage_log / triage_policy / segment_metrics),
       # not the archived audit project.
       - ./nat_sandbox/severity_lab/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # index-hygiene + pipeline-healer schemas (tables, policies, seeded demo jobs) so
+      # all three verticals have their tables on first boot — not just triage.
+      - ./nat_sandbox/severity_lab/sql/index_hygiene.sql:/docker-entrypoint-initdb.d/02-index-hygiene.sql:ro
+      - ./nat_sandbox/severity_lab/sql/pipeline_healer.sql:/docker-entrypoint-initdb.d/03-pipeline-healer.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U versos -d versos"]
       interval: 5s

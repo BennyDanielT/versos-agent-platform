@@ -23,3 +23,33 @@ class PolicyReq(BaseModel):
 
 class AskReq(BaseModel):
     message: str
+
+
+# --- index-hygiene ---------------------------------------------------------
+class IndexReviewReq(BaseModel):
+    decision: str                       # approve | reject
+    reviewer: str
+    review_comment: str = ""
+
+
+class ApplyReq(BaseModel):
+    allow_auto: bool = False            # also run findings whose mode is 'auto'
+
+
+# --- pipeline healer -------------------------------------------------------
+class HealReq(BaseModel):
+    job_ref: str = ""                   # a job id as string, or "" to sweep all failed
+
+
+# --- simulator (all optional: send only the knobs you're changing) ---------
+class SimConfigReq(BaseModel):
+    speed: float | None = None
+    triage_enabled: bool | None = None
+    triage_per_min: float | None = None
+    pipeline_enabled: bool | None = None
+    jobs_per_min: float | None = None
+    job_fail_rate: float | None = None
+    auto_heal: bool | None = None
+    index_enabled: bool | None = None
+    index_ops_per_min: float | None = None
+    auto_scan: bool | None = None
