@@ -39,3 +39,17 @@ class ApplyReq(BaseModel):
 # --- pipeline healer -------------------------------------------------------
 class HealReq(BaseModel):
     job_ref: str = ""                   # a job id as string, or "" to sweep all failed
+
+
+# --- simulator (all optional: send only the knobs you're changing) ---------
+class SimConfigReq(BaseModel):
+    speed: float | None = None
+    triage_enabled: bool | None = None
+    triage_per_min: float | None = None
+    pipeline_enabled: bool | None = None
+    jobs_per_min: float | None = None
+    job_fail_rate: float | None = None
+    auto_heal: bool | None = None
+    index_enabled: bool | None = None
+    index_ops_per_min: float | None = None
+    auto_scan: bool | None = None

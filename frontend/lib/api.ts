@@ -9,6 +9,8 @@ import type {
   IndexPolicyRow,
   PipelineJob,
   PolicyRow,
+  SimConfig,
+  SimStatus,
   SegmentMetric,
   Ticket,
   TriageResult,
@@ -81,4 +83,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ job_ref }),
     }),
+
+  // --- simulator ---
+  simStatus: () => req<SimStatus>("sim/status"),
+  simStart: (cfg: Partial<SimConfig> = {}) =>
+    req<SimStatus>("sim/start", { method: "POST", body: JSON.stringify(cfg) }),
+  simStop: () => req<SimStatus>("sim/stop", { method: "POST", body: "{}" }),
+  simConfig: (cfg: Partial<SimConfig>) =>
+    req<SimStatus>("sim/config", { method: "POST", body: JSON.stringify(cfg) }),
 };

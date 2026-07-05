@@ -128,3 +128,37 @@ export interface HealPolicyRow {
   updated_by: string | null;
   updated_at: string;
 }
+
+// ---- Simulator -----------------------------------------------------------
+export interface SimConfig {
+  speed: number;
+  triage_enabled: boolean;
+  triage_per_min: number;
+  pipeline_enabled: boolean;
+  jobs_per_min: number;
+  job_fail_rate: number;
+  auto_heal: boolean;
+  index_enabled: boolean;
+  index_ops_per_min: number;
+  auto_scan: boolean;
+}
+
+export interface SimStats {
+  started_at: number | null;
+  uptime_sec: number;
+  triage_done: number;
+  triage_errors: number;
+  jobs_created: number;
+  jobs_processed: number;
+  jobs_failed: number;
+  heals: number;
+  index_ops: number;
+  scans: number;
+  errors: number;
+}
+
+export interface SimStatus {
+  running: boolean;
+  config: SimConfig;
+  stats: SimStats;
+}

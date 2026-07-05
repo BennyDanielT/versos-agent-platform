@@ -51,9 +51,10 @@ async def review_finding(pool: asyncpg.Pool, finding_id: int, decision: str,
 # ---------------------------------------------------------------------------
 # INDEX HYGIENE — actions (delegate to the package)
 # ---------------------------------------------------------------------------
-async def run_scan(dsn: str) -> list[dict]:
-    from severity_lab.index_hygiene import scan_indexes
-    return await scan_indexes(dsn)
+async def run_scan(dsn: str, min_unused_age_days: float | None = None) -> list[dict]:
+    from severity_lab.index_hygiene import scan_indexes, _MIN_UNUSED_AGE_DAYS
+    age = _MIN_UNUSED_AGE_DAYS if min_unused_age_days is None else min_unused_age_days
+    return await scan_indexes(dsn, age)
 
 
 async def apply_findings(dsn: str, allow_auto: bool) -> list[dict]:
