@@ -36,3 +36,29 @@ Legend: 🟢 small (hours) · 🟡 medium (a day) · 🔴 large (multi-day)
 - [ ] 🟡 **No `bloated`-index detector.** The schema lists `bloated` as a finding type but it
   isn't implemented (needs `pgstattuple` or an estimate query). *Why:* bloat is one of the
   most common real index problems.
+
+---
+
+## Feature 3 — Pipeline Healer
+
+- [ ] 🟡 **Human review of `propose` / `escalate` in the UI.** Triage and Index both have
+  Approve/Reject; the heal_log has `decision`/`reviewer` columns but no endpoint or UI.
+  *Why:* symmetry — the human-in-the-loop step is missing for the one vertical that most
+  needs it (a proposed fix should be approvable).
+- [ ] 🟡 **`verify` models no re-execution latency.** It checks job status immediately after
+  re-queue, so a "retry" reads as resolved instantly rather than modeling a real re-run.
+  *Why:* the retry-cycle / escalate-on-exhaustion branch rarely fires in the sim.
+- [ ] 🟢 **`scale` / `oom` has no resource dimension.** It re-queues like every other fix;
+  there's no simulated capacity that scaling actually changes. *Why:* diagnosis realism.
+
+---
+
+## Cross-cutting
+
+- [ ] 🔴 **Close the promotion loop end-to-end.** Evidence is logged everywhere
+  (`segment_metrics`, `index_action_metrics`, `heal_log`) but the system never promotes a
+  segment's autonomy on its own once metrics clear the bar — it's always a human editing a
+  policy table. Wiring `promotion_job`/`monitor_job` into the backend + simulator is the
+  single highest-leverage item: it turns the central thesis from *told* into *demonstrated*.
+- [ ] 🟡 **AuthN/AuthZ.** No auth on the API or console. Fine for a local/demo, required for
+  anything real (reviewer identity is currently a hardcoded string).
