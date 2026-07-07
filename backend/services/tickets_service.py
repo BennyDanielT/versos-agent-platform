@@ -7,7 +7,8 @@ import asyncpg
 async def list_tickets(pool: asyncpg.Pool, limit: int) -> list[dict]:
     rows = await pool.fetch(
         "SELECT id, complaint_text, severity, category, confidence, recommended_mode, "
-        "decision, reviewer, created_at FROM triage_log ORDER BY id DESC LIMIT $1", limit)
+        "decision, reviewer, customer_satisfied, created_at FROM triage_log "
+        "ORDER BY id DESC LIMIT $1", limit)
     return [dict(r) for r in rows]
 
 
@@ -40,4 +41,23 @@ async def record_review(pool: asyncpg.Pool, ticket_id: int, decision: str, revie
         ticket_id, decision,
         json.dumps(final_remediation) if final_remediation is not None else None,
         review_comment, reviewer)
+    return not result.endswith("0")
+
+
+async def record_csat(pool: asyncpg.Pool, ticket_id: int, satisfied: bool) -> bool:
+    """Customer satisfaction on the (auto) reply — the ground-truth signal for auto-mode quality."""
+    result = await pool.execute(
+        "UPDATE triage_log SET customer_satisfied=$2, feedback_at=now() WHERE id=$1",
+        ticket_id, satisfied)
+    return not result.endswith("0")
+
+
+async def escalate(pool: asyncpg.Pool, ticket_id: int) -> bool:
+    """Customer wasn't satisfied with the auto reply → route it to a human. Reclassify to
+    'suggest' so it enters the review queue, and record the dissatisfaction (customer_satisfied)."""
+    result = await pool.execute(
+        "UPDATE triage_log SET recommended_mode='suggest', "
+        "mode_reason='Escalated by the customer for human review.', "
+        "customer_satisfied=false, feedback_at=now() "
+        "WHERE id=$1", ticket_id)
     return not result.endswith("0")

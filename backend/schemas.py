@@ -31,6 +31,10 @@ class FlagReq(BaseModel):
     updated_by: str = "console"
 
 
+class CsatReq(BaseModel):
+    satisfied: bool                     # customer thumbs up/down on the auto reply
+
+
 # --- index-hygiene ---------------------------------------------------------
 class IndexReviewReq(BaseModel):
     decision: str                       # approve | reject

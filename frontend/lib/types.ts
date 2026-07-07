@@ -19,6 +19,7 @@ export interface TriageResult {
   recommended_mode: AutonomyMode;     // what the gate landed on
   mode_reason: string;                // WHY it landed there — the explainability hero
   is_support_request?: boolean;       // false = off-topic / not a real support request (flagged)
+  ticket_id?: number;                 // triage_log id (for CSAT / escalate)
 }
 
 // A runtime feature flag row from GET /admin/flags (the system_flags table).
@@ -39,6 +40,7 @@ export interface Ticket {
   recommended_mode: AutonomyMode;
   decision: string | null;            // null = awaiting human review
   reviewer: string | null;
+  customer_satisfied?: boolean | null; // CSAT on the (auto) reply
   created_at: string;
 }
 

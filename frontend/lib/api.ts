@@ -56,6 +56,14 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  csat: (id: number, satisfied: boolean) =>
+    req<{ status: string }>(`tickets/${id}/csat`, {
+      method: "POST",
+      body: JSON.stringify({ satisfied }),
+    }),
+  escalate: (id: number) =>
+    req<{ status: string }>(`tickets/${id}/escalate`, { method: "POST", body: "{}" }),
+
   policy: () => req<PolicyRow[]>("policy"),
   upsertPolicy: (body: PolicyRow & { updated_by: string }) =>
     req<{ status: string }>("policy", { method: "PUT", body: JSON.stringify(body) }),

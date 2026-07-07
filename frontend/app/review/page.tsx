@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
@@ -16,18 +16,54 @@ import {
 import { cn } from "@/lib/utils";
 import type { Ticket } from "@/lib/types";
 
-export default function ReviewPage() {
-  const tickets = useQuery({ queryKey: ["tickets"], queryFn: () => api.listTickets(50) });
+type Status = "pending" | "approved" | "rejected" | "auto";
+const statusOf = (t: Ticket): Status =>
+  t.decision === "approve" ? "approved"
+  : t.decision === "reject" ? "rejected"
+  : t.recommended_mode === "auto" ? "auto"
+  : "pending";
+
+const STATUS_LABEL: Record<Status, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  auto: "Auto-resolved",
+};
+
+// Loose fuzzy: case-insensitive substring on the complaint text.
+const fuzzy = (text: string, q: string) => text.toLowerCase().includes(q.trim().toLowerCase());
+
+const COLS = "grid-cols-[2.5rem_5.5rem_7rem_1fr_4.5rem_5.5rem_6.5rem]";
+
+export default function SupportRequestsPage() {
+  const tickets = useQuery({ queryKey: ["tickets"], queryFn: () => api.listTickets(200) });
   const [reviewer, setReviewer] = useState("you@versos");
+  const [modeF, setModeF] = useState("all");
+  const [statusF, setStatusF] = useState("all");
+  const [catF, setCatF] = useState("all");
+  const [q, setQ] = useState("");
+
+  const categories = useMemo(
+    () => Array.from(new Set((tickets.data ?? []).map((t) => t.category))).sort(),
+    [tickets.data],
+  );
+
+  const rows = (tickets.data ?? []).filter((t) => {
+    if (modeF !== "all" && t.recommended_mode !== modeF) return false;
+    if (statusF !== "all" && statusOf(t) !== statusF) return false;
+    if (catF !== "all" && t.category !== catF) return false;
+    if (q && !fuzzy(t.complaint_text, q)) return false;
+    return true;
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Review queue</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Support Requests</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Agent proposals awaiting a human. Expand a ticket to see the full assessment, optionally
-            correct the remediation, then decide — approvals feed the promotion metrics.
+            Every request — the review queue plus history. Expand a pending item to see the full
+            assessment, optionally correct the remediation, and decide. Approvals feed the metrics.
           </p>
         </div>
         <label className="text-xs text-muted-foreground">
@@ -40,33 +76,88 @@ export default function ReviewPage() {
         </label>
       </header>
 
-      {tickets.isPending && <Loading label="Loading tickets…" />}
-      {tickets.isError && <ErrorBox error={tickets.error} />}
-      {tickets.data?.length === 0 && <Empty label="No tickets yet. Triage one from Copilot." />}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search complaints…"
+          className="w-56 rounded-lg border border-input bg-background px-3 py-1.5 outline-none focus:ring-2 focus:ring-ring"
+        />
+        <Select label="Mode" value={modeF} onChange={setModeF} options={["all", "suggest", "approved", "auto"]} />
+        <Select label="Status" value={statusF} onChange={setStatusF} options={["all", "pending", "approved", "rejected", "auto"]} />
+        <Select label="Category" value={catF} onChange={setCatF} options={["all", ...categories]} />
+        <span className="text-xs text-muted-foreground">{rows.length} shown</span>
+      </div>
 
-      {tickets.data && tickets.data.length > 0 && (
-        <ul className="space-y-2">
-          {tickets.data.map((t) => (
-            <ReviewRow key={t.id} ticket={t} reviewer={reviewer} />
-          ))}
-        </ul>
+      {tickets.isPending && <Loading label="Loading…" />}
+      {tickets.isError && <ErrorBox error={tickets.error} />}
+      {tickets.data && rows.length === 0 && <Empty label="No requests match these filters." />}
+
+      {rows.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border">
+          {/* Column headers */}
+          <div className={cn("grid items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", COLS)}>
+            <span>ID</span>
+            <span>Severity</span>
+            <span>Category</span>
+            <span>Complaint</span>
+            <span>Conf.</span>
+            <span>Mode</span>
+            <span className="text-right">Status</span>
+          </div>
+          <ul className="divide-y divide-border">
+            {rows.map((t) => (
+              <SRRow key={t.id} ticket={t} reviewer={reviewer} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
 }
 
-function ReviewRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
+function Select({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[];
+}) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+      {label}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function StatusBadge({ status }: { status: Status }) {
+  const cls = {
+    pending: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+    approved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    rejected: "bg-red-500/15 text-red-700 dark:text-red-400",
+    auto: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  }[status];
+  return <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium", cls)}>{STATUS_LABEL[status]}</span>;
+}
+
+function SRRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [remediation, setRemediation] = useState<string | null>(null);
+  const status = statusOf(ticket);
+  const actionable = status === "pending";
 
   const detail = useQuery({
     queryKey: ["ticket", ticket.id],
     queryFn: () => api.getTicket(ticket.id),
     enabled: open,
   });
-
-  // Seed the editable remediation from the agent's proposal, once, when detail arrives.
   useEffect(() => {
     if (detail.data && remediation === null) {
       setRemediation((detail.data.developer_remediation ?? []).join("\n"));
@@ -79,7 +170,6 @@ function ReviewRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
         decision,
         reviewer,
         review_comment: "",
-        // On approve, send the (possibly edited) remediation as the gold answer.
         final_remediation:
           decision === "approve" && remediation != null
             ? remediation.split("\n").map((s) => s.trim()).filter(Boolean)
@@ -91,40 +181,23 @@ function ReviewRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
     },
   });
 
-  const reviewed = ticket.decision != null;
-
   return (
-    <Card className="overflow-hidden">
+    <li>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50"
+        className={cn("grid w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50", COLS)}
       >
-        <span className="w-8 shrink-0 text-xs tabular-nums text-muted-foreground">#{ticket.id}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">#{ticket.id}</span>
         <SeverityBadge severity={ticket.severity} />
-        <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground sm:block">
-          {ticket.category}
-        </span>
-        <p className="flex-1 truncate text-sm">{ticket.complaint_text}</p>
+        <span className="truncate text-xs text-muted-foreground">{ticket.category}</span>
+        <span className="truncate text-sm">{ticket.complaint_text}</span>
         <Confidence value={ticket.confidence} />
         <ModeBadge mode={ticket.recommended_mode} />
-        <span className="w-28 shrink-0 text-right text-xs">
-          {reviewed ? (
-            <span
-              className={cn(
-                "font-medium",
-                ticket.decision === "approve" ? "text-emerald-600" : "text-muted-foreground",
-              )}
-            >
-              {ticket.decision} · {ticket.reviewer}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{open ? "▲" : "▼ review"}</span>
-          )}
-        </span>
+        <span className="text-right"><StatusBadge status={status} /></span>
       </button>
 
       {open && (
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border bg-muted/20 p-4">
           {detail.isPending ? (
             <Loading />
           ) : detail.isError ? (
@@ -136,57 +209,52 @@ function ReviewRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
               </Field>
               <Field label="Summary">{detail.data.summary ?? "—"}</Field>
               <Field label="Suggested customer reply (PII-masked)">
-                <span className="italic text-muted-foreground">
-                  {detail.data.suggested_customer_reply || "—"}
-                </span>
+                <span className="italic text-muted-foreground">{detail.data.suggested_customer_reply || "—"}</span>
               </Field>
-              <Field label="Developer remediation (edit to correct = the gold answer)">
-                <textarea
-                  value={remediation ?? ""}
-                  onChange={(e) => setRemediation(e.target.value)}
-                  rows={4}
-                  className="w-full resize-y rounded-lg border border-input bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="one step per line"
-                />
+              <Field label={actionable ? "Developer remediation (edit to correct = the gold answer)" : "Developer remediation"}>
+                {actionable ? (
+                  <textarea
+                    value={remediation ?? ""}
+                    onChange={(e) => setRemediation(e.target.value)}
+                    rows={4}
+                    className="w-full resize-y rounded-lg border border-input bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <ol className="list-decimal space-y-1 pl-5">
+                    {(detail.data.developer_remediation ?? []).map((s, i) => <li key={i}>{s}</li>)}
+                  </ol>
+                )}
               </Field>
 
-              {reviewed ? (
-                <p className="text-xs text-muted-foreground">
-                  Reviewed: <span className="font-medium">{ticket.decision}</span> by {ticket.reviewer}
-                </p>
-              ) : (
+              {actionable ? (
                 <div className="flex gap-2">
-                  <Button
-                    onClick={() => review.mutate("approve")}
-                    disabled={review.isPending}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
+                  <Button onClick={() => review.mutate("approve")} disabled={review.isPending} className="bg-emerald-600 hover:bg-emerald-700">
                     {review.isPending ? "Saving…" : "Approve"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => review.mutate("reject")}
-                    disabled={review.isPending}
-                  >
+                  <Button variant="outline" onClick={() => review.mutate("reject")} disabled={review.isPending}>
                     Reject
                   </Button>
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {status === "auto"
+                    ? "Auto-resolved by the agent — no human review needed."
+                    : `Reviewed: ${ticket.decision} by ${ticket.reviewer ?? "—"}.`}
+                </p>
               )}
               {review.isError && <ErrorBox error={review.error} />}
             </div>
           ) : null}
         </div>
       )}
-    </Card>
+    </li>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div>{children}</div>
     </div>
   );

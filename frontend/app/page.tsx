@@ -24,7 +24,9 @@ export default function DashboardPage() {
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: () => api.jobs() });
   const healLog = useQuery({ queryKey: ["heal-log"], queryFn: () => api.healLog(100) });
 
-  const awaiting = tickets.data?.filter((t) => t.decision === null).length ?? 0;
+  // auto tickets were responded to automatically → not "awaiting" a human.
+  const awaiting =
+    tickets.data?.filter((t) => t.decision === null && t.recommended_mode !== "auto").length ?? 0;
   const openFindings = findings.data?.filter((f) => f.decision === null).length ?? 0;
   const failedJobs = jobs.data?.filter((j) => j.status === "failed").length ?? 0;
 
