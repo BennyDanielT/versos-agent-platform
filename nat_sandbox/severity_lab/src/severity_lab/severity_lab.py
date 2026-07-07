@@ -70,6 +70,13 @@ class TriageResult(BaseModel):
     summary: str = Field(description="one-sentence neutral summary of the complaint")
     developer_remediation: list[str] = Field(description="ordered steps for a developer to fix/triage")
     suggested_customer_reply: str = Field(description="a short, polite draft reply to the customer")
+    # RELEVANCE — the model's own on-topic judgment. false = off-topic / general question / spam /
+    # chit-chat (not a real support request). Used to blank remediation and hold for a human.
+    is_support_request: bool = Field(
+        default=True,
+        description="true ONLY if this is a genuine customer-support request about our "
+                    "media-processing product; false for off-topic/general questions, spam, or "
+                    "chit-chat (e.g. 'what is Chick-fil-A').")
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -187,6 +194,10 @@ async def triage_ticket_function(config: TriageTicketConfig, builder: Builder):
         prompt = (
             "You are a customer-support triage assistant for a media-processing company. "
             "Assess the complaint and fill every field; be honest about confidence. "
+            "Set is_support_request=false when the message is NOT a genuine support request about "
+            "our product (off-topic, general-knowledge, spam, chit-chat). When false, use "
+            "severity 'low', category 'other', and an EMPTY developer_remediation list — do not "
+            "invent fix steps for something that isn't a support issue. "
             "developer_remediation must be a list of short step strings.\n\n"
             f"Complaint: {complaint}"
         )
@@ -205,6 +216,12 @@ async def triage_ticket_function(config: TriageTicketConfig, builder: Builder):
                 "mode_reason": "Triage error — defaulting to human review.",
             }, indent=2)
 
+        # RELEVANCE gate — an off-topic / non-support message gets NO remediation and never acts.
+        off_topic = not result.is_support_request
+        if off_topic:
+            result.severity = "low"
+            result.developer_remediation = ["Not a customer-support request; no developer action."]
+
         # Autonomy comes from the human-owned policy table, enforced in code.
         mode, reason = await _decide_from_policy(
             pool, result.severity, result.category, result.confidence)
@@ -214,6 +231,9 @@ async def triage_ticket_function(config: TriageTicketConfig, builder: Builder):
         if suspicious:
             mode, reason = "suggest", ("Input flagged as possible prompt injection; "
                                        "held for human review.")
+        # Off-topic messages are flagged and held — never auto-acted, no remediation processed.
+        if off_topic:
+            mode, reason = "suggest", "Off-topic / not a support request; flagged, no action taken."
 
         # GUARDRAIL layer 7 (output) — Presidio redacts PII from the customer-facing reply
         # before it's ever logged or returned (emails/phones/names/cards -> <ENTITY>).

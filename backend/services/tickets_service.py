@@ -13,7 +13,17 @@ async def list_tickets(pool: asyncpg.Pool, limit: int) -> list[dict]:
 
 async def get_ticket(pool: asyncpg.Pool, ticket_id: int) -> dict | None:
     row = await pool.fetchrow("SELECT * FROM triage_log WHERE id = $1", ticket_id)
-    return dict(row) if row else None
+    if row is None:
+        return None
+    d = dict(row)
+    # asyncpg returns JSONB as a text string — parse the list columns so the API returns arrays.
+    for k in ("developer_remediation", "final_remediation"):
+        if isinstance(d.get(k), str):
+            try:
+                d[k] = json.loads(d[k])
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return d
 
 
 async def segment_metrics(pool: asyncpg.Pool) -> list[dict]:

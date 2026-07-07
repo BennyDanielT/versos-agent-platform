@@ -13,6 +13,7 @@ const NAV = [
   { href: "/pipeline", label: "Pipeline" },
   { href: "/policy", label: "Policy & Metrics" },
   { href: "/simulation", label: "Simulation" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function NavBar() {

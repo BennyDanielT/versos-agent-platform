@@ -1,48 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { api } from "@/lib/api";
-import { Confidence, Empty, ErrorBox, Loading, ModeBadge, SeverityBadge } from "@/components/ui";
+import {
+  Button,
+  Card,
+  Confidence,
+  Empty,
+  ErrorBox,
+  Loading,
+  ModeBadge,
+  SeverityBadge,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 import type { Ticket } from "@/lib/types";
 
 export default function ReviewPage() {
-  const qc = useQueryClient();
   const tickets = useQuery({ queryKey: ["tickets"], queryFn: () => api.listTickets(50) });
   const [reviewer, setReviewer] = useState("you@versos");
 
-  const review = useMutation({
-    mutationFn: (v: { id: number; decision: "approve" | "reject" }) =>
-      api.review(v.id, { decision: v.decision, reviewer, review_comment: "" }),
-    // Optimistic but honest: flip the row immediately, roll back if the server rejects.
-    onMutate: async (v) => {
-      await qc.cancelQueries({ queryKey: ["tickets"] });
-      const prev = qc.getQueryData<Ticket[]>(["tickets"]);
-      qc.setQueryData<Ticket[]>(["tickets"], (old) =>
-        old?.map((t) => (t.id === v.id ? { ...t, decision: v.decision, reviewer } : t)),
-      );
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(["tickets"], ctx.prev),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
-  });
-
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Review queue</h1>
-          <p className="text-sm text-zinc-500">
-            Agent proposals awaiting a human. Approving is the human-in-the-loop control the
-            autonomy gate defers to.
+          <h1 className="text-2xl font-semibold tracking-tight">Review queue</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Agent proposals awaiting a human. Expand a ticket to see the full assessment, optionally
+            correct the remediation, then decide — approvals feed the promotion metrics.
           </p>
         </div>
-        <label className="text-xs text-zinc-500">
+        <label className="text-xs text-muted-foreground">
           reviewer{" "}
           <input
             value={reviewer}
             onChange={(e) => setReviewer(e.target.value)}
-            className="ml-1 rounded border border-zinc-300 px-2 py-1 text-zinc-700"
+            className="ml-1 rounded border border-input bg-background px-2 py-1 text-foreground outline-none focus:ring-2 focus:ring-ring"
           />
         </label>
       </header>
@@ -54,43 +47,147 @@ export default function ReviewPage() {
       {tickets.data && tickets.data.length > 0 && (
         <ul className="space-y-2">
           {tickets.data.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3"
-            >
-              <span className="w-10 text-xs tabular-nums text-zinc-400">#{t.id}</span>
-              <SeverityBadge severity={t.severity} />
-              <span className="w-28 truncate text-xs text-zinc-500">{t.category}</span>
-              <p className="flex-1 truncate text-sm">{t.complaint_text}</p>
-              <Confidence value={t.confidence} />
-              <ModeBadge mode={t.recommended_mode} />
-              <div className="w-32 text-right">
-                {t.decision ? (
-                  <span className="text-xs font-medium text-zinc-500">
-                    {t.decision} · {t.reviewer}
-                  </span>
-                ) : (
-                  <div className="flex justify-end gap-1">
-                    <button
-                      onClick={() => review.mutate({ id: t.id, decision: "approve" })}
-                      className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => review.mutate({ id: t.id, decision: "reject" })}
-                      className="rounded border border-zinc-300 px-2 py-1 text-xs"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            </li>
+            <ReviewRow key={t.id} ticket={t} reviewer={reviewer} />
           ))}
         </ul>
       )}
-      {review.isError && <ErrorBox error={review.error} />}
+    </div>
+  );
+}
+
+function ReviewRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [remediation, setRemediation] = useState<string | null>(null);
+
+  const detail = useQuery({
+    queryKey: ["ticket", ticket.id],
+    queryFn: () => api.getTicket(ticket.id),
+    enabled: open,
+  });
+
+  // Seed the editable remediation from the agent's proposal, once, when detail arrives.
+  useEffect(() => {
+    if (detail.data && remediation === null) {
+      setRemediation((detail.data.developer_remediation ?? []).join("\n"));
+    }
+  }, [detail.data, remediation]);
+
+  const review = useMutation({
+    mutationFn: (decision: "approve" | "reject") =>
+      api.review(ticket.id, {
+        decision,
+        reviewer,
+        review_comment: "",
+        // On approve, send the (possibly edited) remediation as the gold answer.
+        final_remediation:
+          decision === "approve" && remediation != null
+            ? remediation.split("\n").map((s) => s.trim()).filter(Boolean)
+            : undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: ["ticket", ticket.id] });
+    },
+  });
+
+  const reviewed = ticket.decision != null;
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="w-8 shrink-0 text-xs tabular-nums text-muted-foreground">#{ticket.id}</span>
+        <SeverityBadge severity={ticket.severity} />
+        <span className="hidden w-28 shrink-0 truncate text-xs text-muted-foreground sm:block">
+          {ticket.category}
+        </span>
+        <p className="flex-1 truncate text-sm">{ticket.complaint_text}</p>
+        <Confidence value={ticket.confidence} />
+        <ModeBadge mode={ticket.recommended_mode} />
+        <span className="w-28 shrink-0 text-right text-xs">
+          {reviewed ? (
+            <span
+              className={cn(
+                "font-medium",
+                ticket.decision === "approve" ? "text-emerald-600" : "text-muted-foreground",
+              )}
+            >
+              {ticket.decision} · {ticket.reviewer}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{open ? "▲" : "▼ review"}</span>
+          )}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-border p-4">
+          {detail.isPending ? (
+            <Loading />
+          ) : detail.isError ? (
+            <ErrorBox error={detail.error} />
+          ) : detail.data ? (
+            <div className="space-y-3 text-sm">
+              <Field label="Autonomy reason">
+                <span className="text-muted-foreground">{detail.data.mode_reason ?? "—"}</span>
+              </Field>
+              <Field label="Summary">{detail.data.summary ?? "—"}</Field>
+              <Field label="Suggested customer reply (PII-masked)">
+                <span className="italic text-muted-foreground">
+                  {detail.data.suggested_customer_reply || "—"}
+                </span>
+              </Field>
+              <Field label="Developer remediation (edit to correct = the gold answer)">
+                <textarea
+                  value={remediation ?? ""}
+                  onChange={(e) => setRemediation(e.target.value)}
+                  rows={4}
+                  className="w-full resize-y rounded-lg border border-input bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="one step per line"
+                />
+              </Field>
+
+              {reviewed ? (
+                <p className="text-xs text-muted-foreground">
+                  Reviewed: <span className="font-medium">{ticket.decision}</span> by {ticket.reviewer}
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => review.mutate("approve")}
+                    disabled={review.isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {review.isPending ? "Saving…" : "Approve"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => review.mutate("reject")}
+                    disabled={review.isPending}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              )}
+              {review.isError && <ErrorBox error={review.error} />}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div>{children}</div>
     </div>
   );
 }

@@ -68,8 +68,21 @@ export default function CopilotPage() {
 }
 
 function TriageOutput({ result }: { result: TriageResult }) {
+  const offTopic = result.is_support_request === false;
   return (
     <div className="space-y-4">
+      {offTopic && (
+        <Card className="border-amber-500/40 bg-amber-500/10">
+          <CardBody className="flex items-center gap-2 text-sm">
+            <span className="rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Off-topic
+            </span>
+            <span className="text-muted-foreground">
+              Not a support request — flagged, held for a human, no remediation generated.
+            </span>
+          </CardBody>
+        </Card>
+      )}
       {/* THE HERO: the decision and WHY — the explainability story, traceable to
           confidence + policy. */}
       <Card className="border-primary/30 bg-accent/40">

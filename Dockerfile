@@ -1,36 +1,46 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# Versos backend — FastAPI + NeMo Agent Toolkit (slim deploy image).
-# Runs all three verticals. To add Guardrails/Presidio/Phoenix later, uncomment
-# the EXTRAS block below (no code change needed elsewhere).
+# Versos backend — FastAPI + NeMo Agent Toolkit. Multi-stage: a builder installs
+# everything into a venv; the runtime image copies ONLY the venv + source (no gcc,
+# no pip cache, no build tooling) → smaller, faster cold starts.
+#
+# Ships: slim runtime deps + NeMo Guardrails (flag-gated at runtime).
+# Does NOT ship: Presidio/spaCy (PII masking is a dependency-free regex masker) or
+# Phoenix/eval (dev-only). See requirements-extras.txt to add those back.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS base
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
-
-WORKDIR /app
-
-# Build deps for any packages without wheels; removed after install to stay slim.
+# ---------- builder ----------
+FROM python:3.12-slim AS builder
+ENV PIP_NO_CACHE_DIR=1
 RUN apt-get update && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+WORKDIR /app
 
-# 1) Python deps first (cached layer). Slim set only.
-COPY requirements-deploy.txt requirements-extras.txt ./
-RUN pip install --upgrade pip && pip install -r requirements-deploy.txt
+# Deps first (cached layer): slim set + NeMo Guardrails only.
+COPY requirements-deploy.txt .
+RUN pip install --upgrade pip \
+    && pip install -r requirements-deploy.txt \
+    && pip install nemoguardrails==0.22.0
 
-# --- EXTRAS (Guardrails / Presidio / Phoenix). Uncomment to enable later: ---
-# RUN pip install -r requirements-extras.txt \
-#  && pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-
-# 2) App source + the NAT workflow package (editable install triggers registration).
-COPY backend/ ./backend/
+# The NAT workflow package (editable install triggers component registration).
 COPY nat_sandbox/ ./nat_sandbox/
 RUN pip install -e nat_sandbox/severity_lab
 
-# Non-root runtime.
-RUN useradd --create-home appuser
+# ---------- runtime ----------
+FROM python:3.12-slim AS runtime
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
+WORKDIR /app
+
+# The prebuilt venv + the source the editable install + config files point at.
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app/nat_sandbox /app/nat_sandbox
+COPY backend/ ./backend/
+
+RUN useradd --create-home appuser && chown -R appuser /app
 USER appuser
 
 # DATABASE_URL, NVIDIA_API_KEY, CORS_ORIGINS are injected at runtime (never baked in).

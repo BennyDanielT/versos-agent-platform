@@ -25,6 +25,12 @@ class AskReq(BaseModel):
     message: str
 
 
+class FlagReq(BaseModel):
+    name: str                           # kill_switch | input_rail | mask_input
+    enabled: bool
+    updated_by: str = "console"
+
+
 # --- index-hygiene ---------------------------------------------------------
 class IndexReviewReq(BaseModel):
     decision: str                       # approve | reject

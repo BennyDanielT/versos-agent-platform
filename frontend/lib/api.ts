@@ -12,7 +12,9 @@ import type {
   SimConfig,
   SimStatus,
   SegmentMetric,
+  SystemFlag,
   Ticket,
+  TicketDetail,
   TriageResult,
 } from "./types";
 
@@ -43,9 +45,12 @@ export const api = {
     }),
 
   listTickets: (limit = 50) => req<Ticket[]>(`tickets?limit=${limit}`),
-  getTicket: (id: number) => req<Ticket>(`tickets/${id}`),
+  getTicket: (id: number) => req<TicketDetail>(`tickets/${id}`),
 
-  review: (id: number, body: { decision: string; reviewer: string; review_comment: string }) =>
+  review: (
+    id: number,
+    body: { decision: string; reviewer: string; review_comment: string; final_remediation?: string[] },
+  ) =>
     req<{ status: string }>(`tickets/${id}/review`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -91,4 +96,12 @@ export const api = {
   simStop: () => req<SimStatus>("sim/stop", { method: "POST", body: "{}" }),
   simConfig: (cfg: Partial<SimConfig>) =>
     req<SimStatus>("sim/config", { method: "POST", body: JSON.stringify(cfg) }),
+
+  // --- admin: live runtime flags (kill switch + guardrail toggles) ---
+  flags: () => req<SystemFlag[]>("admin/flags"),
+  setFlag: (name: string, enabled: boolean) =>
+    req<SystemFlag>("admin/flags", {
+      method: "POST",
+      body: JSON.stringify({ name, enabled, updated_by: "console" }),
+    }),
 };

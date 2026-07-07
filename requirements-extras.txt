@@ -1,22 +1,22 @@
-# EXTRAS — add these ON TOP of requirements-deploy.txt to light up the full experience:
-#   * NeMo Guardrails  → the LLM input rail (intent-level jailbreak screening)
-#   * Presidio         → PII masking on the customer-facing reply
-#   * Phoenix + OTel   → LLM tracing / evals UI (also set PHOENIX_TRACING=1)
-#   * nat-eval         → `nat eval` golden-set evaluator
+# EXTRAS — add these ON TOP of requirements-deploy.txt to light up the full experience.
 #
-# No code change is required — the runtime auto-detects these once installed. In the
-# backend Dockerfile, uncomment the extras line and (for Presidio) the spaCy model line.
+#   * NeMo Guardrails → the LLM input rail (intent-level jailbreak / off-topic screening).
+#                       Shipped in the deploy image but FLAG-GATED (system_flags.input_rail),
+#                       OFF by default — it's an extra LLM call per triage. Flip on for demos.
+#   * Phoenix + OTel  → LLM tracing / evals UI (also set PHOENIX_TRACING=1). Dev only.
+#   * nat-eval        → `nat eval` golden-set evaluator. Dev only.
+#
+# PII masking needs NO package — it's a dependency-free regex masker in guardrails_runtime.py
+# (email/phone/card/SSN/IP). We dropped Presidio + spaCy from the image on purpose (hundreds of
+# MB). Trade-off: no PERSON/LOCATION masking. To restore name masking, re-add presidio-analyzer +
+# presidio-anonymizer + the spaCy en_core_web_sm model and swap mask_pii() back to the Presidio impl.
 
-nvidia-nat-eval==1.8.0
-nvidia-nat-opentelemetry==1.8.0
-
+# --- guardrails: goes in the DEPLOY image (flag-gated at runtime) ---
 nemoguardrails==0.22.0
 
-presidio-analyzer==2.2.362
-presidio-anonymizer==2.2.362
-# Presidio also needs the spaCy English model (NOT on PyPI — install by URL):
-#   pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-
+# --- dev-only: observability + eval (NOT in the deploy image) ---
+nvidia-nat-eval==1.8.0
+nvidia-nat-opentelemetry==1.8.0
 arize-phoenix==17.9.0
 arize-phoenix-client==2.9.0
 arize-phoenix-otel==0.16.1

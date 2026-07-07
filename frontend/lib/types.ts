@@ -18,6 +18,15 @@ export interface TriageResult {
   suggested_customer_reply: string;
   recommended_mode: AutonomyMode;     // what the gate landed on
   mode_reason: string;                // WHY it landed there — the explainability hero
+  is_support_request?: boolean;       // false = off-topic / not a real support request (flagged)
+}
+
+// A runtime feature flag row from GET /admin/flags (the system_flags table).
+export interface SystemFlag {
+  name: string;
+  enabled: boolean;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 // Rows from GET /tickets (the triage_log decision log).
@@ -31,6 +40,16 @@ export interface Ticket {
   decision: string | null;            // null = awaiting human review
   reviewer: string | null;
   created_at: string;
+}
+
+// The full row from GET /tickets/{id} (SELECT * — includes the assessment fields).
+export interface TicketDetail extends Ticket {
+  summary?: string;
+  developer_remediation?: string[];
+  suggested_customer_reply?: string;
+  mode_reason?: string;
+  final_remediation?: string[] | null;
+  review_comment?: string | null;
 }
 
 // Per-segment autonomy policy from GET /policy.

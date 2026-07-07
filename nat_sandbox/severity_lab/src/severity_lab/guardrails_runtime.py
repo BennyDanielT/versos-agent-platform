@@ -4,23 +4,23 @@ Two pieces, both built ONCE and reused per call (heavy to construct):
   - input_rails(): a NeMo Guardrails LLM input rail — screens INTENT (off-topic, novel
     jailbreaks) that the regex `_screen_input` can't. `is_input_blocked()` runs ONLY the
     input rail (no wasted main-LLM generation).
-  - mask_pii(): deterministic Presidio redaction of PII in customer-facing text, so the
-    `suggested_customer_reply` never leaks emails/phones/names/cards.
+  - mask_pii(): dependency-free REGEX redaction of structured PII (email/phone/card/SSN/IP) in
+    customer-facing text. No Presidio/spaCy (they'd add hundreds of MB to the image); trade-off is
+    no PERSON/LOCATION masking. Always-on, no deps.
 
-Construction is lazy + cached so importing this module is cheap and a missing model/key
-degrades gracefully (the tool falls back to regex-only rather than crashing).
+The NeMo rail is lazy + cached so importing this module is cheap and a missing package/key
+degrades gracefully (the input rail becomes a no-op rather than crashing).
 """
 from __future__ import annotations
 
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _GUARDRAILS_DIR = Path(__file__).resolve().parents[2] / "guardrails"   # severity_lab/guardrails
-_PII_ENTITIES = ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD",
-                 "US_SSN", "IP_ADDRESS", "IBAN_CODE", "LOCATION"]
 
 
 # --- INPUT RAIL (NeMo Guardrails) -------------------------------------------
@@ -50,29 +50,29 @@ async def is_input_blocked(text: str) -> bool:
         return False
 
 
-# --- OUTPUT PII MASKING (Presidio) ------------------------------------------
-@lru_cache(maxsize=1)
-def _presidio():
-    from presidio_analyzer import AnalyzerEngine
-    from presidio_analyzer.nlp_engine import NlpEngineProvider
-    from presidio_anonymizer import AnonymizerEngine
-    nlp_engine = NlpEngineProvider(nlp_configuration={
-        "nlp_engine_name": "spacy",
-        "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
-    }).create_engine()
-    analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["en"])
-    return analyzer, AnonymizerEngine()
+# --- OUTPUT PII MASKING (regex, no deps) ------------------------------------
+# "Lite" masker: deterministic regex for the high-value STRUCTURED entities. No spaCy /
+# Presidio (they hard-depend on spaCy → hundreds of MB). Trade: no PERSON/LOCATION masking.
+# Order matters: match longer/more-specific patterns before shorter ones.
+_PII_PATTERNS: list[tuple[str, re.Pattern]] = [
+    ("EMAIL_ADDRESS", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
+    ("IP_ADDRESS",    re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")),
+    ("CREDIT_CARD",   re.compile(r"\b\d(?:[ -]?\d){11,15}\b")),          # 12–16 digits
+    ("US_SSN",        re.compile(r"\b\d{3}[- ]\d{2}[- ]\d{4}\b")),
+    ("PHONE_NUMBER",  re.compile(
+        r"\b(?:\+?\d{1,3}[ .-]?)?(?:\(\d{3}\)|\d{3})[ .-]?\d{3}[ .-]?\d{4}\b")),
+]
 
 
 def mask_pii(text: str) -> str:
-    """Redact PII (email/phone/name/card/…) → `<EMAIL_ADDRESS>` etc. Deterministic.
-    On any failure, returns the original text (never crash the reply path)."""
+    """Redact structured PII (email/phone/card/SSN/IP) → `<EMAIL_ADDRESS>` etc. Deterministic,
+    dependency-free. On any failure, returns the original text (never crash the reply path)."""
     if not text:
         return text
     try:
-        analyzer, anonymizer = _presidio()
-        found = analyzer.analyze(text=text, language="en", entities=_PII_ENTITIES)
-        return anonymizer.anonymize(text=text, analyzer_results=found).text
+        for label, pattern in _PII_PATTERNS:
+            text = pattern.sub(f"<{label}>", text)
+        return text
     except Exception as exc:
-        logger.warning("Presidio masking unavailable, returning text unmasked: %s", exc)
+        logger.warning("PII masking failed, returning text unmasked: %s", exc)
         return text
