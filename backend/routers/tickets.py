@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.db import get_pool
-from backend.schemas import ReviewReq
+from backend.schemas import CsatReq, ReviewReq
 from backend.services import tickets_service
 
 router = APIRouter(tags=["tickets"])
@@ -34,3 +34,19 @@ async def review(ticket_id: int, body: ReviewReq, pool=Depends(get_pool)):
     if not ok:
         raise HTTPException(status_code=404, detail="ticket not found")
     return {"status": "recorded", "ticket_id": ticket_id}
+
+
+@router.post("/tickets/{ticket_id}/csat")
+async def csat(ticket_id: int, body: CsatReq, pool=Depends(get_pool)):
+    ok = await tickets_service.record_csat(pool, ticket_id, body.satisfied)
+    if not ok:
+        raise HTTPException(status_code=404, detail="ticket not found")
+    return {"status": "recorded", "ticket_id": ticket_id, "satisfied": body.satisfied}
+
+
+@router.post("/tickets/{ticket_id}/escalate")
+async def escalate(ticket_id: int, pool=Depends(get_pool)):
+    ok = await tickets_service.escalate(pool, ticket_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="ticket not found")
+    return {"status": "escalated", "ticket_id": ticket_id}

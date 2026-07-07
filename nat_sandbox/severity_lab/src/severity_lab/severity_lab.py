@@ -192,12 +192,16 @@ async def triage_ticket_function(config: TriageTicketConfig, builder: Builder):
             complaint = mask_pii(complaint)
 
         prompt = (
-            "You are a customer-support triage assistant for a media-processing company. "
-            "Assess the complaint and fill every field; be honest about confidence. "
-            "Set is_support_request=false when the message is NOT a genuine support request about "
-            "our product (off-topic, general-knowledge, spam, chit-chat). When false, use "
-            "severity 'low', category 'other', and an EMPTY developer_remediation list — do not "
-            "invent fix steps for something that isn't a support issue. "
+            "You are a customer-support triage assistant for a media-processing company "
+            "(video editing / export / accounts / billing). Assess the complaint and fill every "
+            "field; be honest about confidence.\n"
+            "is_support_request: ANY issue, question, or complaint about OUR product or service — "
+            "bugs, crashes, export/media quality, audio, billing, login/account, however MINOR or "
+            "vague — is a support request (true). Set it FALSE ONLY when the message is clearly "
+            "unrelated to us: general-knowledge questions, other companies, spam, or chit-chat "
+            "(e.g. 'what is Chick-fil-A', 'who won the world cup'). When in doubt, it's true. "
+            "When false, use severity 'low', category 'other', and an EMPTY developer_remediation "
+            "list — don't invent fix steps for a non-support message.\n"
             "developer_remediation must be a list of short step strings.\n\n"
             f"Complaint: {complaint}"
         )
@@ -240,17 +244,19 @@ async def triage_ticket_function(config: TriageTicketConfig, builder: Builder):
         safe_reply = mask_pii(result.suggested_customer_reply)
 
         # Log the full decision — this row is also a future evals/shadow-mode datapoint.
-        await pool.execute(
+        ticket_id = await pool.fetchval(
             """INSERT INTO triage_log
                (complaint_text, category, severity, confidence, summary,
                 developer_remediation, suggested_customer_reply,
                 recommended_mode, mode_reason, model_name)
-               VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)""",
+               VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)
+               RETURNING id""",
             complaint, result.category, result.severity, result.confidence,
             result.summary, json.dumps(result.developer_remediation),
             safe_reply, mode, reason, config.llm_name)
 
         out = result.model_dump()
+        out["ticket_id"] = ticket_id                       # so the client can record CSAT / escalate
         out["suggested_customer_reply"] = safe_reply       # masked reply leaves the tool
         out["recommended_mode"] = mode
         out["mode_reason"] = reason

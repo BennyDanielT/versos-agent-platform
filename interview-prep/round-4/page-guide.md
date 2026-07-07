@@ -182,3 +182,48 @@ Fixed in `tickets_service.get_ticket` (parse `developer_remediation`/`final_reme
 Files: `frontend/app/review/page.tsx` (rebuilt), `frontend/lib/types.ts` (TicketDetail),
 `frontend/lib/api.ts` (getTicket→TicketDetail, review + final_remediation),
 `backend/services/tickets_service.py` (JSONB parse).
+
+---
+
+## Submit Request (`/submit`) — customer-facing demo page
+
+A public "how can we help?" form (no login — accounts/sessions deferred). A customer submits a
+complaint → `POST /triage` → the page shows a **mode-appropriate response** so you can DEMO all
+three autonomy tiers live, plus a "System decision (demo)" panel showing the flagging.
+- **auto** → "Resolved instantly" + the AI reply (the reply is 'sent').
+- **approved** → "Response ready — being reviewed" (+ the draft, muted). Approve it in `/review`.
+- **suggest** → "We're on it — a specialist will follow up."
+- **off-topic** → "That doesn't look like a product request."
+
+**Demo policy (so tiers fire reliably)** — the model almost always picks `category=other`, so the
+`*/other` segments are mapped: `low/other → auto` (min_conf 0.7), `medium/other → approved` (0.7),
+`high/other → suggest` (default). Sample buttons: Minor bug → auto, Media quality → approved,
+Account locked → suggest. To reset later, set those policy rows back on `/policy`.
+
+**Relevance fix (round 4b):** the `is_support_request` classifier was too aggressive (flagged a
+minor subtitle-typo complaint as off-topic → suggest). Tightened the prompt in `severity_lab.py`:
+ANY issue with our product (however minor/vague) is a support request; only clearly-unrelated
+messages (other companies, general knowledge, spam, chit-chat) are false. All three demo tiers now
+fire reliably.
+
+### Round 4c — auto-response loop, CSAT, persisted client SRs, Support Requests grid
+- **Auto = genuinely handled:** excluded from the review queue + dashboard "awaiting" count. Triage
+  now returns `ticket_id` (`INSERT … RETURNING id`) so the client can act on the request.
+- **CSAT + escalate** (new endpoints `POST /tickets/{id}/csat`, `/escalate`; services in
+  `tickets_service.py`). CSAT writes `customer_satisfied` (the auto-mode ground truth). Escalate
+  reclassifies the ticket to `suggest` (+ `customer_satisfied=false`) so it enters the human queue.
+- **`/submit` rebuilt (client-facing):** persists submitted requests in `localStorage` (no accounts
+  yet) with a switchable list; per-request status from a live `getTicket` re-fetch. Copy per state:
+  auto → "Response from our assistant" + 👍/👎 + "Escalate for review"; approved/suggest → "We're on
+  it"; after a dev approves → "A specialist has responded" + reply. REMOVED the "draft under review"
+  line and the "System decision (demo)" panel (those live on the dev side now). Off-topic doesn't
+  create a stored SR.
+- **`/review` → "Support Requests":** shows ALL requests (queue + history) as a grid with column
+  headers (ID/Severity/Category/Complaint/Conf/Mode/Status) + filters (mode, status, category, fuzzy
+  search). Actions (approve/reject + corrected remediation) only on `pending` rows; auto/reviewed are
+  read-only. Status derived: pending / approved / rejected / auto-resolved.
+- **Nav grouping:** Submit Request + Simulation moved under a **Clients** dropdown; internal surfaces
+  stay flat. "Review" renamed "Support Requests".
+Files: `severity_lab.py` (RETURNING id), `backend/services/tickets_service.py` + `routers/tickets.py`
++ `schemas.py` (csat/escalate), `frontend/app/submit/page.tsx`, `frontend/app/review/page.tsx`,
+`frontend/components/nav.tsx`, `frontend/lib/{api,types}.ts`.
