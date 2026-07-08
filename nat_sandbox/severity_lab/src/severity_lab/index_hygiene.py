@@ -23,6 +23,8 @@ from nat.plugin_api import FunctionBaseConfig
 from nat.plugin_api import FunctionInfo
 from nat.plugin_api import register_function
 
+from .db import default_database_url
+
 logger = logging.getLogger(__name__)
 
 # --- precision guards / risk thresholds ------------------------------------
@@ -225,7 +227,7 @@ async def apply_findings(database_url: str, allow_auto: bool = False) -> list[di
 class IndexHygieneConfig(FunctionBaseConfig, name="index_hygiene"):
     """Config for the index-hygiene scan. No LLM — detection is pure SQL."""
     database_url: str = Field(
-        default="postgresql://versos:versos@localhost:5432/versos",
+        default_factory=default_database_url,
         description="asyncpg DSN for the index_findings / index_policy / index_seen tables")
     min_unused_age_days: float = Field(
         default=_MIN_UNUSED_AGE_DAYS,
