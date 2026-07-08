@@ -65,7 +65,7 @@ cat > /tmp/taskdef.json <<JSON
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
-  "memory": "2048",
+  "memory": "4096",
   "executionRoleArn": "$EXEC_ROLE",
   "containerDefinitions": [{
     "name": "backend",
@@ -117,16 +117,24 @@ aws ecs create-cluster --cluster-name "$CLUSTER" --region "$AWS_REGION" >/dev/nu
 # Is the service already there and ACTIVE? (re-runs update instead of failing)
 EXISTS=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
   --query 'services[?status==`ACTIVE`].serviceName' --output text --region "$AWS_REGION" 2>/dev/null || true)
+# Zero-downtime rollover: keep the old task serving (100%) until the new one is
+# healthy, allowing 2x during a deploy (200%). Without this, a single-task service
+# briefly has no healthy target mid-swap and the ALB returns 502/503.
+DEPLOY_CFG="minimumHealthyPercent=100,maximumPercent=200"
 if [ -n "$EXISTS" ]; then
-  echo "  (service exists → forcing new deployment)"
+  echo "  (service exists → applying new task def + deploy config, forcing new deployment)"
   aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
-    --task-definition versos-backend --force-new-deployment --region "$AWS_REGION" >/dev/null
+    --task-definition versos-backend --force-new-deployment \
+    --deployment-configuration "$DEPLOY_CFG" \
+    --health-check-grace-period-seconds 120 \
+    --region "$AWS_REGION" >/dev/null
 else
   # No suppression here — if create fails we want to SEE why.
   aws ecs create-service \
     --cluster "$CLUSTER" --service-name "$SERVICE" \
     --task-definition versos-backend \
     --desired-count 1 --launch-type FARGATE \
+    --deployment-configuration "$DEPLOY_CFG" \
     --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SVC_SG],assignPublicIp=ENABLED}" \
     --load-balancers "targetGroupArn=$TG_ARN,containerName=backend,containerPort=8090" \
     --health-check-grace-period-seconds 120 \
