@@ -1,4 +1,27 @@
-# Local access map — Versos agent platform
+# Access map — Versos agent platform
+
+## 🚀 LIVE ON AWS (share this with Versos)
+**https://main.d2z7m08sbque97.amplifyapp.com/**
+
+| Piece | Where | Notes |
+|---|---|---|
+| Frontend | AWS Amplify (`main` branch, auto-deploys on push) | reads `BACKEND_URL` env var |
+| Backend | ECS Fargate behind ALB — `http://versos-alb-1284193883.us-east-1.elb.amazonaws.com` | cluster `versos`, service `versos-backend` |
+| Database | RDS Postgres `versos-db` (us-east-1) | schema self-migrates on first boot |
+| CI/CD | GitHub Actions → ECR → `ecs update-service --force-new-deployment` | OIDC, no stored AWS keys |
+
+- **Backend health:** `curl http://versos-alb-1284193883.us-east-1.elb.amazonaws.com/health`
+- **Swagger:** http://versos-alb-1284193883.us-east-1.elb.amazonaws.com/docs
+- **Toggle flags in prod:** the **Settings** page (writes `system_flags` in RDS) — kill switch, `input_rail`, `mask_input`.
+- **Seed demo data:** Clients → Simulation → Start (~2-3 min) → Stop. Each complaint = a real LLM call.
+- **Teardown (stop the meter):** see `DEPLOY-AWS.md` → Teardown.
+
+> The ALB is plain HTTP on purpose: the Next.js proxy calls it **server-side**, so the browser
+> never talks to it directly and there's no mixed-content problem.
+
+---
+
+## Local access map
 
 How to reach every surface when running the stack locally. Full stack:
 `Next.js :3000 → proxy → FastAPI :8090 → Postgres (Adminer :8081)`.

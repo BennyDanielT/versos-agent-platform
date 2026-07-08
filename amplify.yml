@@ -1,6 +1,6 @@
 # AWS Amplify Hosting build spec (monorepo — the Next.js app lives in ./frontend).
 # Amplify auto-detects Next.js SSR and provisions the compute. Set BACKEND_URL in the
-# Amplify console (App settings → Environment variables) to the backend's App Runner URL —
+# Amplify console (App settings → Environment variables) to the backend's ALB URL —
 # the server-side proxy (app/api/[...path]/route.ts) reads it.
 version: 1
 applications:
@@ -12,6 +12,13 @@ applications:
             - npm ci
         build:
           commands:
+            # Amplify console env vars reach the BUILD, but the SSR compute doesn't reliably
+            # inherit them, so the proxy's process.env.BACKEND_URL was undefined at runtime.
+            # Next loads .env* files into process.env for Route Handlers, so writing
+            # .env.production here makes it resolve. Deliberately NOT NEXT_PUBLIC_ — that
+            # would inline the backend URL into the client bundle (as would `env` in
+            # next.config.ts, which the Next docs also mark legacy for this reason).
+            - echo "BACKEND_URL=$BACKEND_URL" >> .env.production
             - npm run build
       artifacts:
         baseDirectory: .next
