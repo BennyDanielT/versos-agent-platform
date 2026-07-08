@@ -1,10 +1,14 @@
 # Deploy Versos to AWS — CI/CD with GitHub Actions
 
-**Architecture:** backend (FastAPI + NAT) on **App Runner**, DB on **RDS Postgres**, frontend
-(Next.js) on **AWS Amplify**. Deploys are automated:
+**Architecture:** backend (FastAPI + NAT) on **ECS Fargate** behind an **ALB**, DB on **RDS
+Postgres**, frontend (Next.js) on **AWS Amplify**. Deploys are automated:
+
+> App Runner stopped accepting new customers (Apr 2026) → the backend runs on ECS Fargate behind an
+> internet-facing ALB (stable URL). The Amplify frontend proxies to it **server-side**, so plain HTTP
+> is fine (the browser never calls the backend directly).
 
 - **Backend** → GitHub Actions (`.github/workflows/deploy-backend.yml`) builds the image, pushes to
-  **ECR**, and triggers an **App Runner** deployment. Auth is **OIDC** (no stored AWS keys).
+  **ECR**, and forces a new **ECS** deployment. Auth is **OIDC** (no stored AWS keys).
 - **Frontend** → Amplify connects to the repo and auto-builds on every push (its own CI/CD).
 - **Schema** → the backend self-initializes the DB on first boot (`backend/migrate.py`, idempotent),
   so there's no manual `psql` step.
@@ -86,23 +90,37 @@ aws iam put-role-policy --role-name versos-gh-deploy --policy-name deploy --poli
 echo "AWS_DEPLOY_ROLE_ARN=arn:aws:iam::$ACCT:role/versos-gh-deploy"
 ```
 
-### 4. First backend image + App Runner service
-Push an initial image so App Runner has something to point at:
+### 4. First backend image (built by GitHub Actions — no local Docker)
+CloudShell's Docker disk is too small for this image, so let the pipeline build it:
+1. Set the repo secret/vars from step 5 first (`AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, `ECR_REPOSITORY`).
+2. **Actions → Deploy backend → Run workflow** on `main`. It builds + pushes `$REPO:latest` to ECR
+   and skips the rollout (no ECS service yet). Wait for green.
+
+Add `ecs:UpdateService` to the deploy role so future pushes can roll ECS:
 ```bash
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR
-git clone https://github.com/$GH_REPO versos && cd versos
-docker build -t $ECR/$REPO:latest . && docker push $ECR/$REPO:latest
+cat > ecs-perms.json <<JSON
+{ "Version": "2012-10-17", "Statement": [
+  { "Effect": "Allow", "Action": ["ecs:UpdateService","ecs:DescribeServices"], "Resource": "*" }
+]}
+JSON
+aws iam put-role-policy --role-name versos-gh-deploy --policy-name ecs-deploy --policy-document file://ecs-perms.json
 ```
-Then in the **App Runner console** → Create service → Container registry → `$REPO:latest`:
-- **Deployment trigger: Manual** (the workflow controls rollouts).
-- **Port: 8090**
-- **Env vars:** `DATABASE_URL` (from step 2), `NVIDIA_API_KEY` (your key), `CORS_ORIGINS=["*"]`.
-- Create → copy the **service ARN** and the **service URL**; `curl <URL>/health` → `{"status":"ok"}`.
+
+### 4b. ECS Fargate service (ALB + cluster + service)
+Set `DB_URL` + `NVIDIA_API_KEY`, then run the bootstrap script (clones nothing heavy, no Docker):
+```bash
+export DB_URL='postgresql://versos:<pw>@<rds-endpoint>:5432/versos'
+export NVIDIA_API_KEY='nvapi-...'
+bash deploy/ecs-bootstrap.sh          # from a `git clone` of the repo
+```
+It prints the **`BACKEND_URL` (http://<alb-dns>)** and the `ECS_CLUSTER`/`ECS_SERVICE` values.
+`curl http://<alb-dns>/health` → `{"status":"ok"}` once the task is running (~2-3 min).
 
 ### 5. GitHub repo secrets + variables
 Repo → Settings → Secrets and variables → Actions:
-- **Secrets:** `AWS_DEPLOY_ROLE_ARN` (step 3), `APPRUNNER_SERVICE_ARN` (step 4).
-- **Variables:** `AWS_REGION` (e.g. `us-east-1`), `ECR_REPOSITORY` (`versos-backend`).
+- **Secrets:** `AWS_DEPLOY_ROLE_ARN` (step 3).
+- **Variables:** `AWS_REGION` (`us-east-1`), `ECR_REPOSITORY` (`versos-backend`),
+  `ECS_CLUSTER` (`versos`), `ECS_SERVICE` (`versos-backend`).
 
 ### 6. Frontend on Amplify
 Amplify console → New app → Host web app → connect the GitHub repo/branch. Amplify reads
@@ -115,8 +133,9 @@ env) and redeploy for a tighter CORS.
 ## Part B — the CI/CD flow (after bootstrap)
 
 - **Push to `main`** touching `backend/**`, `nat_sandbox/**`, `Dockerfile`, or `requirements-deploy.txt`
-  → the **Deploy backend** workflow builds → ECR → App Runner. (Or run it manually via
-  *Actions → Deploy backend → Run workflow*.)
+  → the **Deploy backend** workflow builds → ECR → `ecs update-service --force-new-deployment` (the
+  task def pins `:latest`, so ECS re-pulls the fresh image). Or run it manually via
+  *Actions → Deploy backend → Run workflow*.
 - **Any push** → **Amplify** rebuilds the frontend automatically.
 - New RDS? The backend self-migrates on first boot. Existing DB? Migration is skipped (sentinel guard).
 
