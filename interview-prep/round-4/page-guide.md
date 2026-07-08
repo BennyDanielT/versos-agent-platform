@@ -227,3 +227,23 @@ fire reliably.
 Files: `severity_lab.py` (RETURNING id), `backend/services/tickets_service.py` + `routers/tickets.py`
 + `schemas.py` (csat/escalate), `frontend/app/submit/page.tsx`, `frontend/app/review/page.tsx`,
 `frontend/components/nav.tsx`, `frontend/lib/{api,types}.ts`.
+
+### Nav grouping (round 4d)
+- **Support Triage ▾** = Copilot + Support Requests. **Clients ▾** = Submit Request + Simulation.
+  Dashboard / Index Hygiene / Pipeline / Policy & Metrics / Settings stay flat. (`components/nav.tsx`
+  refactored into reusable `NavGroup`.)
+
+---
+
+## Index Hygiene (`/index`) — verified all-real
+
+Deterministic Postgres catalog scan (NO LLM) → findings → risk → autonomy gate → human review → apply.
+100% live data (verified):
+- Findings = `GET /index/findings` (index_findings table). Metrics tiles = `GET /index/metrics`
+  (index_action_metrics view): findings/open, **bytes reclaimed**, **re-create rate** (the "oops"
+  signal, must be ~0 to trust auto).
+- **Run scan** = `POST /index/scan` (real catalog scan). **Apply approved** = `POST /index/apply`
+  (real `DROP … CONCURRENTLY`). Approve/Reject = `POST /index/findings/{id}/review`.
+- Autonomy visible in the grid: duplicate DROP = `approved`, unused DROP = `suggest`, and DROP is
+  never `auto` (destructive) — the blast-radius story. Live scan found a real `sim.events` duplicate
+  (leftover from the simulator's index churn) + the 2 seeded unused indexes. No hardcoded data.

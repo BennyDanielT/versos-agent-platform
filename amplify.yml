@@ -1,0 +1,22 @@
+# AWS Amplify Hosting build spec (monorepo — the Next.js app lives in ./frontend).
+# Amplify auto-detects Next.js SSR and provisions the compute. Set BACKEND_URL in the
+# Amplify console (App settings → Environment variables) to the backend's App Runner URL —
+# the server-side proxy (app/api/[...path]/route.ts) reads it.
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
