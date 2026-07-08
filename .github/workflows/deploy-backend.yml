@@ -47,16 +47,17 @@ jobs:
           docker push "$IMAGE:latest"
           docker push "$IMAGE:${GITHUB_SHA::7}"
 
-      - name: Trigger App Runner deployment
+      - name: Trigger ECS deployment
         env:
-          SERVICE_ARN: ${{ secrets.APPRUNNER_SERVICE_ARN }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
         run: |
-          # During first-time bootstrap the App Runner service doesn't exist yet;
-          # the image is already in ECR, so just skip the rollout in that case.
-          if [ -z "$SERVICE_ARN" ]; then
-            echo "APPRUNNER_SERVICE_ARN not set — skipping rollout (bootstrap build)."
+          # During first-time bootstrap the ECS service doesn't exist yet; the image
+          # is already in ECR, so just skip the rollout in that case. The task def pins
+          # the :latest tag, so --force-new-deployment re-pulls the freshly pushed image.
+          if [ -z "$ECS_CLUSTER" ] || [ -z "$ECS_SERVICE" ]; then
+            echo "ECS_CLUSTER/ECS_SERVICE not set — skipping rollout (bootstrap build)."
             exit 0
           fi
-          aws apprunner start-deployment \
-            --service-arn "$SERVICE_ARN" \
-            --region "$AWS_REGION"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --force-new-deployment --region "$AWS_REGION"
