@@ -107,18 +107,32 @@ aws elbv2 create-listener --load-balancer-arn "$ALB_ARN" --protocol HTTP --port 
 ALB_DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns "$ALB_ARN" \
   --query 'LoadBalancers[0].DNSName' --output text --region "$AWS_REGION")
 
+echo "== ECS service-linked role (needed for the first ECS service in an account) =="
+aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com 2>/dev/null \
+  || echo "  (already exists)"
+
 echo "== cluster + service =="
 aws ecs create-cluster --cluster-name "$CLUSTER" --region "$AWS_REGION" >/dev/null 2>&1 || true
-aws ecs create-service \
-  --cluster "$CLUSTER" --service-name "$SERVICE" \
-  --task-definition versos-backend \
-  --desired-count 1 --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SVC_SG],assignPublicIp=ENABLED}" \
-  --load-balancers "targetGroupArn=$TG_ARN,containerName=backend,containerPort=8090" \
-  --health-check-grace-period-seconds 120 \
-  --region "$AWS_REGION" >/dev/null 2>&1 \
-  || aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
-       --task-definition versos-backend --force-new-deployment --region "$AWS_REGION" >/dev/null
+
+# Is the service already there and ACTIVE? (re-runs update instead of failing)
+EXISTS=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+  --query 'services[?status==`ACTIVE`].serviceName' --output text --region "$AWS_REGION" 2>/dev/null || true)
+if [ -n "$EXISTS" ]; then
+  echo "  (service exists → forcing new deployment)"
+  aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+    --task-definition versos-backend --force-new-deployment --region "$AWS_REGION" >/dev/null
+else
+  # No suppression here — if create fails we want to SEE why.
+  aws ecs create-service \
+    --cluster "$CLUSTER" --service-name "$SERVICE" \
+    --task-definition versos-backend \
+    --desired-count 1 --launch-type FARGATE \
+    --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SVC_SG],assignPublicIp=ENABLED}" \
+    --load-balancers "targetGroupArn=$TG_ARN,containerName=backend,containerPort=8090" \
+    --health-check-grace-period-seconds 120 \
+    --region "$AWS_REGION" >/dev/null
+  echo "  (service created)"
+fi
 
 echo
 echo "=========================================================="
