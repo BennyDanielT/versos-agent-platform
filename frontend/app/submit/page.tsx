@@ -10,6 +10,13 @@ import type { TriageResult } from "@/lib/types";
 // Submitted requests are kept in the browser (no accounts yet) so the demo can switch between them.
 type SR = { id: number; complaint: string; ts: number; mode: string };
 const LS_KEY = "versos_srs";
+
+// Why the request wasn't turned into a ticket. `null` = it was.
+type Notice = "off_topic" | "blocked" | null;
+
+// A guardrail/input-rail refusal (as opposed to a triage failure). Both come back as
+// HTTP 200 with no ticket_id, so the summary is what tells them apart.
+const isBlocked = (res: TriageResult) => (res.summary ?? "").startsWith("Rejected");
 const loadSRs = (): SR[] => {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
@@ -28,18 +35,32 @@ export default function SubmitPage() {
   const [text, setText] = useState("");
   const [srs, setSrs] = useState<SR[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [offTopic, setOffTopic] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
 
   useEffect(() => setSrs(loadSRs()), []);
 
   const submit = useMutation({
-    mutationFn: (c: string) => api.triage(c),
+    mutationFn: async (c: string) => {
+      const res = await api.triage(c);
+      // The backend returns 200 with NO ticket_id on three paths: the regex guardrail,
+      // the NeMo input rail, and an LLM/structured-output failure. The first two are a
+      // deliberate "we won't accept this"; the third is a real error. Previously all
+      // three fell through to a silent no-op, so Submit looked broken.
+      if (res.is_support_request !== false && !res.ticket_id && !isBlocked(res)) {
+        throw new Error("We couldn't process your request just now. Please try again in a moment.");
+      }
+      return res;
+    },
     onSuccess: (res: TriageResult) => {
-      if (res.is_support_request === false || !res.ticket_id) {
-        setOffTopic(res.is_support_request === false); // don't store off-topic as a request
+      if (res.is_support_request === false) {
+        setNotice("off_topic"); // don't store off-topic as a request
         return;
       }
-      setOffTopic(false);
+      if (!res.ticket_id) {
+        setNotice("blocked"); // guardrail / input rail refused it
+        return;
+      }
+      setNotice(null);
       const sr: SR = { id: res.ticket_id, complaint: text.trim(), ts: Date.now(), mode: res.recommended_mode };
       setSrs((prev) => {
         const next = [sr, ...prev].slice(0, 50);
@@ -115,11 +136,19 @@ export default function SubmitPage() {
         </Card>
 
         {submit.isError && <ErrorBox error={submit.error} />}
-        {offTopic && (
+        {notice === "off_topic" && (
           <Card className="border-border bg-muted/40">
             <CardBody className="text-sm text-muted-foreground">
               That doesn&apos;t look like a product request. We help with our video product — accounts,
               exports, media quality, and billing. Add a few details and resend.
+            </CardBody>
+          </Card>
+        )}
+        {notice === "blocked" && (
+          <Card className="border-amber-500/40 bg-amber-500/10">
+            <CardBody className="text-sm text-muted-foreground">
+              We couldn&apos;t accept that message. Please describe your issue with our product in your
+              own words and resend.
             </CardBody>
           </Card>
         )}
