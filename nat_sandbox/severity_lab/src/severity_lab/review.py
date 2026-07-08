@@ -17,13 +17,15 @@ from nat.plugin_api import FunctionBaseConfig
 from nat.plugin_api import FunctionInfo
 from nat.plugin_api import register_function
 
+from .db import default_database_url
+
 logger = logging.getLogger(__name__)
 
 
 class ReviewTicketConfig(FunctionBaseConfig, name="review_ticket"):
     """Config for the developer-review tool."""
     database_url: str = Field(
-        default="postgresql://versos:versos@localhost:5432/versos",
+        default_factory=default_database_url,
         description="asyncpg DSN for the triage_log table")
 
 

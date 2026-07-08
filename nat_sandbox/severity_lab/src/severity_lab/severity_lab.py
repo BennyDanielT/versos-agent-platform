@@ -12,6 +12,7 @@ from nat.plugin_api import FunctionInfo
 from nat.plugin_api import LLMFrameworkEnum
 from nat.plugin_api import register_function
 
+from .db import default_database_url
 from .guardrails_runtime import is_input_blocked, mask_pii   # NeMo input rail + Presidio PII mask
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class TriageTicketConfig(FunctionBaseConfig, name="triage_ticket"):
     llm_name: str = Field(description="which configured LLM to use for triage")
     # Where to read the autonomy policy and write the decision log.
     database_url: str = Field(
-        default="postgresql://versos:versos@localhost:5432/versos",
+        default_factory=default_database_url,
         description="asyncpg DSN for the triage_policy and triage_log tables")
 
 
