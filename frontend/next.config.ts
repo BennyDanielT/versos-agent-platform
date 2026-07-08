@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Emit a self-contained server bundle (.next/standalone) so the Docker image can run
-  // `node server.js` without the full node_modules — smaller image, faster cold start.
-  output: "standalone",
+  // Standalone output (`.next/standalone`) is ONLY for the Docker image (`node server.js`).
+  // Amplify's managed Next.js build wants the default output, so gate it on the Docker build.
+  ...(process.env.DOCKER_BUILD ? { output: "standalone" as const } : {}),
 };
 
 export default nextConfig;

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://versos:versos@localhost:5432/versos"
     configs_dir: str = "nat_sandbox/severity_lab/src/severity_lab/configs"
+    sql_dir: str = "nat_sandbox/severity_lab/sql"
+    run_migrations: bool = True       # self-init schema on an empty DB (RDS first boot)
     cors_origins: list[str] = ["*"]   # Next.js dev server; tighten in prod
 
     @property

@@ -12,6 +12,7 @@ FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV DOCKER_BUILD=1
 RUN npm run build
 
 FROM node:22-slim AS runner

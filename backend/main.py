@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
 from backend.db import create_pool
+from backend.migrate import run_migrations
 from backend.routers import admin, agents, index_ops, pipeline_ops, policy, sim, tickets
 from backend.services.nat_service import NatWorkflows
 from backend.services.simulator import Simulator
@@ -26,6 +27,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     # Long-lived resources, built ONCE, shared across all requests:
     app.state.pool = await create_pool(settings.asyncpg_dsn)
+    if settings.run_migrations:
+        await run_migrations(app.state.pool, settings.sql_dir)
     app.state.nat = NatWorkflows()
     await app.state.nat.startup(settings.triage_config_path, settings.agent_config_path)
     # Live data simulator (idle until /sim/start). Feeds the real pipeline, not fake rows.

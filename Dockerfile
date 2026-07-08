@@ -12,7 +12,8 @@
 # ---------- builder ----------
 FROM python:3.12-slim AS builder
 ENV PIP_NO_CACHE_DIR=1
-RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+# gcc + g++: NeMo Guardrails pulls `annoy` (C++ ext) with no py3.12 wheel → it compiles from source.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
