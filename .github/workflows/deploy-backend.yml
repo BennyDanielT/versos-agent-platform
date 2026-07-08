@@ -48,7 +48,15 @@ jobs:
           docker push "$IMAGE:${GITHUB_SHA::7}"
 
       - name: Trigger App Runner deployment
+        env:
+          SERVICE_ARN: ${{ secrets.APPRUNNER_SERVICE_ARN }}
         run: |
+          # During first-time bootstrap the App Runner service doesn't exist yet;
+          # the image is already in ECR, so just skip the rollout in that case.
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "APPRUNNER_SERVICE_ARN not set — skipping rollout (bootstrap build)."
+            exit 0
+          fi
           aws apprunner start-deployment \
-            --service-arn "${{ secrets.APPRUNNER_SERVICE_ARN }}" \
+            --service-arn "$SERVICE_ARN" \
             --region "$AWS_REGION"
