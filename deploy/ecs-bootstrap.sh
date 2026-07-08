@@ -10,7 +10,7 @@
 # Before running, export these (edit the two secrets):
 #   export AWS_REGION=us-east-1
 #   export ACCT=$(aws sts get-caller-identity --query Account --output text)
-#   export DB_URL='postgresql://versos:...@versos-db....rds.amazonaws.com:5432/versos'
+#   export DB_URL='postgresql://<user>:<password>@<rds-endpoint>:5432/versos'
 #   export NVIDIA_API_KEY='nvapi-...'
 # Then:  bash deploy/ecs-bootstrap.sh
 # ---------------------------------------------------------------------------

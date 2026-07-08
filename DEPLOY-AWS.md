@@ -109,7 +109,7 @@ aws iam put-role-policy --role-name versos-gh-deploy --policy-name ecs-deploy --
 ### 4b. ECS Fargate service (ALB + cluster + service)
 Set `DB_URL` + `NVIDIA_API_KEY`, then run the bootstrap script (clones nothing heavy, no Docker):
 ```bash
-export DB_URL='postgresql://versos:<pw>@<rds-endpoint>:5432/versos'
+export DB_URL='postgresql://<user>:<password>@<rds-endpoint>:5432/versos'
 export NVIDIA_API_KEY='nvapi-...'
 bash deploy/ecs-bootstrap.sh          # from a `git clone` of the repo
 ```
