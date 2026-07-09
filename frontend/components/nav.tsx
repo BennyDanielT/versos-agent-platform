@@ -15,7 +15,7 @@ const SUPPORT_TRIAGE: Item[] = [
   { href: "/review", label: "Support Requests" },
 ];
 const OPS: Item[] = [
-  { href: "/index", label: "Index Hygiene" },
+  { href: "/index-hygiene", label: "Index Hygiene" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/policy", label: "Policy & Metrics" },
   { href: "/settings", label: "Settings" },
