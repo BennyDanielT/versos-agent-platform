@@ -124,9 +124,11 @@ Repo → Settings → Secrets and variables → Actions:
 
 ### 6. Frontend on Amplify
 Amplify console → New app → Host web app → connect the GitHub repo/branch. Amplify reads
-`amplify.yml` (appRoot `frontend`). Set env var **`BACKEND_URL`** = the App Runner backend URL.
-Deploy → copy the Amplify URL. Then set the backend's `CORS_ORIGINS=["<amplify-url>"]` (App Runner
-env) and redeploy for a tighter CORS.
+`amplify.yml` (appRoot `frontend`), which writes `BACKEND_URL` into `.env.production` at build so
+the SSR runtime picks it up. Set env var **`BACKEND_URL`** = the backend's ALB URL
+(`http://<alb-dns>`). Deploy → copy the Amplify URL. Optionally tighten the backend's
+`CORS_ORIGINS` to `["<amplify-url>"]` (ECS task env) and redeploy — not required, since the Next.js
+proxy calls the backend server-side.
 
 ---
 
@@ -143,10 +145,43 @@ env) and redeploy for a tighter CORS.
 NeMo Guardrails already ships in the image (flag-gated: flip `system_flags.input_rail` from the
 Settings page). PII masking is the dependency-free regex masker. Phoenix is dev-only.
 
-## Teardown (stop the meter)
+## Pause / resume (cost control — keeps everything, ~$2/day → ~$0.55/day)
+
+Running cost is roughly **$2/day**: Fargate task (~$1, 1 vCPU/4 GB 24/7), ALB (~$0.55, charged
+even idle), RDS `db.t4g.micro` (~$0.40). To park it overnight/between demos **without destroying
+anything** (URLs, data, and config all survive), scale the task to 0 and stop the DB:
+
 ```bash
-aws apprunner list-services --region $AWS_REGION      # get the service ARN
-aws apprunner delete-service --service-arn <arn> --region $AWS_REGION
-aws rds delete-db-instance --db-instance-identifier versos-db --skip-final-snapshot --region $AWS_REGION
-# Amplify: delete the app in the console.
+# ── PAUSE (nightly) ──────────────────────────────────────────────
+curl -s -X POST http://<alb-dns>/sim/stop                       # stop the simulator (only per-call LLM cost)
+aws ecs update-service --cluster versos --service versos-backend --desired-count 0 --region us-east-1
+aws rds stop-db-instance --db-instance-identifier versos-db --region us-east-1
+```
+```bash
+# ── RESUME (morning, ~3-4 min to healthy) ────────────────────────
+aws rds start-db-instance --db-instance-identifier versos-db --region us-east-1
+aws ecs update-service --cluster versos --service versos-backend --desired-count 1 --region us-east-1
+# wait, then verify:
+curl http://<alb-dns>/health          # → {"status":"ok"}
+```
+
+> `<alb-dns>` = `versos-alb-1284193883.us-east-1.elb.amazonaws.com` (the current ALB DNS).
+> **Do NOT delete the ALB** — its DNS name is baked into Amplify's `BACKEND_URL`. Deleting it mints a
+> new URL and breaks the frontend until you reconfigure it. The ~$0.55/day is the price of a stable URL.
+> RDS auto-restarts after 7 days if left stopped; the backend self-migration is skipped on resume
+> (schema already present), so no data is touched.
+
+## Teardown (delete everything — stop the meter completely)
+```bash
+R=us-east-1
+aws ecs update-service --cluster versos --service versos-backend --desired-count 0 --region $R
+aws ecs delete-service --cluster versos --service versos-backend --force --region $R
+aws ecs delete-cluster --cluster versos --region $R
+# ALB + target group
+ALB=$(aws elbv2 describe-load-balancers --names versos-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text --region $R)
+aws elbv2 delete-load-balancer --load-balancer-arn $ALB --region $R
+aws elbv2 delete-target-group --target-group-arn $(aws elbv2 describe-target-groups --names versos-tg --query 'TargetGroups[0].TargetGroupArn' --output text --region $R) --region $R
+# database
+aws rds delete-db-instance --db-instance-identifier versos-db --skip-final-snapshot --region $R
+# Amplify + ECR: delete the app / repo in the console (or `aws amplify delete-app`, `aws ecr delete-repository --force`).
 ```

@@ -81,7 +81,7 @@ export default function DashboardPage() {
           <CardHeader
             title="Index Hygiene"
             subtitle="DB optimization findings"
-            action={<Link href="/index" className="text-xs font-medium text-primary hover:underline">Open →</Link>}
+            action={<Link href="/index-hygiene" className="text-xs font-medium text-primary hover:underline">Open →</Link>}
           />
           <CardBody>
             {findings.isLoading ? (
