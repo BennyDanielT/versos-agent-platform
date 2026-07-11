@@ -51,7 +51,9 @@ export interface TicketDetail extends Ticket {
   suggested_customer_reply?: string;
   mode_reason?: string;
   final_remediation?: string[] | null;
+  final_customer_reply?: string | null;   // dev's edited customer reply (what actually goes out)
   review_comment?: string | null;
+  customer_followup?: string | null;       // latest client follow-up when re-opened
 }
 
 // Per-segment autonomy policy from GET /policy.

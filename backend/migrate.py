@@ -13,11 +13,22 @@ logger = logging.getLogger("versos.migrate")
 
 _FILES = ["schema.sql", "index_hygiene.sql", "pipeline_healer.sql"]
 
+# Additive, idempotent column adds for ALREADY-provisioned DBs. The initial load is
+# guarded by a sentinel (so the healer seed never re-runs), which means new columns in
+# schema.sql never reach an existing RDS. These ALTERs are safe to run every boot.
+_ADDITIVE = [
+    "ALTER TABLE triage_log ADD COLUMN IF NOT EXISTS final_customer_reply TEXT",
+    "ALTER TABLE triage_log ADD COLUMN IF NOT EXISTS customer_followup TEXT",
+]
+
 
 async def run_migrations(pool: asyncpg.Pool, sql_dir: str) -> None:
-    # Sentinel: if the core table exists, the DB is already provisioned — do nothing.
+    # Sentinel: if the core table exists, the DB is already provisioned — only apply the
+    # additive column migrations (cheap, idempotent), then stop.
     if await pool.fetchval("SELECT to_regclass('public.triage_log')") is not None:
-        logger.info("schema already present; skipping migrations")
+        for stmt in _ADDITIVE:
+            await pool.execute(stmt)
+        logger.info("schema present; applied %d additive column migration(s)", len(_ADDITIVE))
         return
     base = Path(sql_dir)
     for name in _FILES:

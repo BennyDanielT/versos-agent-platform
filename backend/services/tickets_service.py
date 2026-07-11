@@ -33,14 +33,21 @@ async def segment_metrics(pool: asyncpg.Pool) -> list[dict]:
 
 
 async def record_review(pool: asyncpg.Pool, ticket_id: int, decision: str, reviewer: str,
-                        final_remediation: list[str] | None, review_comment: str) -> bool:
-    """Returns True if a row was updated, False if the ticket didn't exist."""
+                        final_remediation: list[str] | None, final_customer_reply: str | None,
+                        review_comment: str) -> bool:
+    """Returns True if a row was updated, False if the ticket didn't exist.
+
+    A COALESCE on final_customer_reply means an empty edit doesn't blank a prior reply.
+    Clears customer_followup — the specialist has now answered the latest follow-up.
+    """
     result = await pool.execute(
         "UPDATE triage_log SET decision=$2, final_remediation=$3::jsonb, "
-        "review_comment=$4, reviewer=$5, reviewed_at=now() WHERE id=$1",
+        "final_customer_reply=COALESCE($4, final_customer_reply), "
+        "review_comment=$5, reviewer=$6, reviewed_at=now(), customer_followup=NULL "
+        "WHERE id=$1",
         ticket_id, decision,
         json.dumps(final_remediation) if final_remediation is not None else None,
-        review_comment, reviewer)
+        (final_customer_reply or None), review_comment, reviewer)
     return not result.endswith("0")
 
 
@@ -52,12 +59,14 @@ async def record_csat(pool: asyncpg.Pool, ticket_id: int, satisfied: bool) -> bo
     return not result.endswith("0")
 
 
-async def escalate(pool: asyncpg.Pool, ticket_id: int) -> bool:
-    """Customer wasn't satisfied with the auto reply → route it to a human. Reclassify to
-    'suggest' so it enters the review queue, and record the dissatisfaction (customer_satisfied)."""
+async def escalate(pool: asyncpg.Pool, ticket_id: int, followup: str | None = None) -> bool:
+    """Client wants a human — either on an auto reply, or re-opening after a specialist replied.
+    Reclassify to 'suggest' and CLEAR the decision so it returns to the Pending queue; record
+    the dissatisfaction and any follow-up message (visible to the specialist). Keeps
+    final_customer_reply/reviewed_at as history of the prior response."""
     result = await pool.execute(
-        "UPDATE triage_log SET recommended_mode='suggest', "
+        "UPDATE triage_log SET recommended_mode='suggest', decision=NULL, "
         "mode_reason='Escalated by the customer for human review.', "
-        "customer_satisfied=false, feedback_at=now() "
-        "WHERE id=$1", ticket_id)
+        "customer_satisfied=false, customer_followup=$2, feedback_at=now() "
+        "WHERE id=$1", ticket_id, (followup or None))
     return not result.endswith("0")

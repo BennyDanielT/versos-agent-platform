@@ -167,7 +167,7 @@ function SRView({ id }: { id: number }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket", id] }),
   });
   const escalate = useMutation({
-    mutationFn: () => api.escalate(id),
+    mutationFn: (followup?: string) => api.escalate(id, followup),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ticket", id] });
       qc.invalidateQueries({ queryKey: ["tickets"] });
@@ -179,6 +179,10 @@ function SRView({ id }: { id: number }) {
   const t = detail.data!;
   const reviewed = t.decision === "approve";
   const isAuto = t.recommended_mode === "auto" && !reviewed;
+  // The message that actually goes to the customer: the specialist's edit, else the model's draft.
+  const reply = t.final_customer_reply || t.suggested_customer_reply || "—";
+  // Re-opened: there's a prior specialist reply but it's back in the queue awaiting another look.
+  const reopened = !reviewed && !isAuto && !!t.final_customer_reply;
 
   return (
     <Card className={cn(reviewed ? "border-emerald-500/40 bg-emerald-500/10" : isAuto ? "border-border" : "border-blue-500/40 bg-blue-500/10")}>
@@ -186,12 +190,18 @@ function SRView({ id }: { id: number }) {
         {reviewed ? (
           <>
             <div className="text-sm font-semibold">A specialist has responded</div>
-            <p className="text-sm text-muted-foreground">{t.suggested_customer_reply || "—"}</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{reply}</p>
+            <EscalateBox
+              prompt="Still need help? Send a follow-up and we'll take another look."
+              cta="Send follow-up"
+              pending={escalate.isPending}
+              onSend={(msg) => escalate.mutate(msg)}
+            />
           </>
         ) : isAuto ? (
           <>
             <div className="text-sm font-semibold">Response from our assistant</div>
-            <p className="text-sm text-muted-foreground">{t.suggested_customer_reply || "—"}</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{reply}</p>
             <p className="text-xs text-muted-foreground">
               If this doesn&apos;t resolve your concern, escalate it and a specialist will review it.
             </p>
@@ -211,10 +221,23 @@ function SRView({ id }: { id: number }) {
                   Thanks for your feedback{t.customer_satisfied ? " 👍" : " 👎"}.
                 </span>
               )}
-              <Button size="sm" onClick={() => escalate.mutate()} disabled={escalate.isPending}>
-                {escalate.isPending ? "Escalating…" : "Escalate for review"}
-              </Button>
             </div>
+            <EscalateBox
+              prompt="Prefer a human? Add any detail and a specialist will review it."
+              cta="Escalate for review"
+              pending={escalate.isPending}
+              onSend={(msg) => escalate.mutate(msg)}
+            />
+          </>
+        ) : reopened ? (
+          <>
+            <div className="text-sm font-semibold">We&apos;re taking another look</div>
+            <p className="text-sm text-muted-foreground">
+              Thanks for the follow-up — a specialist will get back to you. Their previous reply:
+            </p>
+            <p className="whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-2 text-sm text-muted-foreground">
+              {reply}
+            </p>
           </>
         ) : (
           <>
@@ -226,5 +249,35 @@ function SRView({ id }: { id: number }) {
         )}
       </CardBody>
     </Card>
+  );
+}
+
+// A small compose box: optional message + a button that escalates / re-opens the ticket.
+function EscalateBox({
+  prompt,
+  cta,
+  pending,
+  onSend,
+}: {
+  prompt: string;
+  cta: string;
+  pending: boolean;
+  onSend: (msg: string) => void;
+}) {
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-3">
+      <p className="text-xs text-muted-foreground">{prompt}</p>
+      <textarea
+        value={msg}
+        onChange={(e) => setMsg(e.target.value)}
+        rows={2}
+        placeholder="Add a detail (optional)…"
+        className="w-full resize-y rounded-lg border border-input bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+      />
+      <Button size="sm" onClick={() => onSend(msg.trim())} disabled={pending}>
+        {pending ? "Sending…" : cta}
+      </Button>
+    </div>
   );
 }
