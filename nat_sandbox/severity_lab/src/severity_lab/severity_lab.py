@@ -70,7 +70,10 @@ class TriageResult(BaseModel):
     confidence: float = Field(description="0..1 confidence in this assessment")
     summary: str = Field(description="one-sentence neutral summary of the complaint")
     developer_remediation: list[str] = Field(description="ordered steps for a developer to fix/triage")
-    suggested_customer_reply: str = Field(description="a short, polite draft reply to the customer")
+    suggested_customer_reply: str = Field(
+        description="a warm, empathetic customer-facing reply of 2-4 sentences: acknowledge the "
+        "specific problem, state concretely what will happen next, and set an expectation "
+        "(timeframe / next step). No internal jargon; do not expose developer steps.")
     # RELEVANCE — the model's own on-topic judgment. false = off-topic / general question / spam /
     # chit-chat (not a real support request). Used to blank remediation and hold for a human.
     is_support_request: bool = Field(

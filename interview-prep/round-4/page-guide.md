@@ -235,7 +235,26 @@ Files: `severity_lab.py` (RETURNING id), `backend/services/tickets_service.py` +
 
 ---
 
-## Index Hygiene (`/index`) — verified all-real
+## Client ⇄ specialist conversation (round 4e)
+
+Three fields on a ticket, deliberately separate:
+- **`suggested_customer_reply`** — customer-facing message (now prompted for 2-4 empathetic sentences).
+- **`developer_remediation`** — engineer-facing fix steps; NEVER shown to the customer.
+- **`final_remediation`** — the dev's corrected steps = the **gold answer** (eval label).
+
+New in 4e:
+- **Editable customer reply.** On the Support Requests page a pending item now has an editable
+  *Customer reply* box (seeded with the model draft). On approve it saves to `final_customer_reply`
+  — that's what the client sees (falls back to the model draft if unedited).
+- **Client can re-open after a specialist reply.** The Submit page shows the reply verbatim + a
+  follow-up box; sending calls `POST /tickets/{id}/escalate` with the message, which clears
+  `decision` (→ back to the **Pending** queue), reclassifies to `suggest`, and stores the note in
+  `customer_followup`. The specialist sees a blue "Client follow-up" banner on that ticket.
+- **Schema:** added `final_customer_reply`, `customer_followup` (TEXT). `migrate.py` applies these
+  as idempotent `ADD COLUMN IF NOT EXISTS` on every boot, so the already-provisioned RDS picks them
+  up (the initial schema load is sentinel-guarded and won't re-run).
+
+## Index Hygiene (`/index-hygiene`) — verified all-real
 
 Deterministic Postgres catalog scan (NO LLM) → findings → risk → autonomy gate → human review → apply.
 100% live data (verified):

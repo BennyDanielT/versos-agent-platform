@@ -24,9 +24,13 @@ CREATE TABLE IF NOT EXISTS triage_log (
     -- --- developer review (filled later; NULL until a human reviews) ---
     decision                 TEXT,         -- 'approve' | 'reject'
     final_remediation        JSONB,        -- the dev's corrected remediation (gold answer)
+    final_customer_reply     TEXT,         -- the dev's edited customer-facing reply (what actually goes out)
     review_comment           TEXT,         -- why it was right/wrong
     reviewer                 TEXT,
     reviewed_at              TIMESTAMPTZ,
+
+    -- --- client follow-up (lightweight re-open after a specialist replied) ---
+    customer_followup        TEXT,         -- latest client message when they ask for another look
 
     -- --- customer feedback (filled later; the GROUND TRUTH for auto'd tickets where
     -- no dev reviews). CSAT on the reply that went out. NULL until feedback arrives. ---

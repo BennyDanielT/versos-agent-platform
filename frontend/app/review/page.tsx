@@ -150,6 +150,7 @@ function SRRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [remediation, setRemediation] = useState<string | null>(null);
+  const [customerReply, setCustomerReply] = useState<string | null>(null);
   const status = statusOf(ticket);
   const actionable = status === "pending";
 
@@ -162,7 +163,11 @@ function SRRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
     if (detail.data && remediation === null) {
       setRemediation((detail.data.developer_remediation ?? []).join("\n"));
     }
-  }, [detail.data, remediation]);
+    if (detail.data && customerReply === null) {
+      // seed the editor with the dev's prior edit, else the model's draft
+      setCustomerReply(detail.data.final_customer_reply ?? detail.data.suggested_customer_reply ?? "");
+    }
+  }, [detail.data, remediation, customerReply]);
 
   const review = useMutation({
     mutationFn: (decision: "approve" | "reject") =>
@@ -174,6 +179,8 @@ function SRRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
           decision === "approve" && remediation != null
             ? remediation.split("\n").map((s) => s.trim()).filter(Boolean)
             : undefined,
+        final_customer_reply:
+          decision === "approve" && customerReply?.trim() ? customerReply.trim() : undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tickets"] });
@@ -204,12 +211,32 @@ function SRRow({ ticket, reviewer }: { ticket: Ticket; reviewer: string }) {
             <ErrorBox error={detail.error} />
           ) : detail.data ? (
             <div className="space-y-3 text-sm">
+              {detail.data.customer_followup && (
+                <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 p-3">
+                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-400">
+                    Client follow-up — asked for another look
+                  </div>
+                  <p className="text-sm">{detail.data.customer_followup}</p>
+                </div>
+              )}
               <Field label="Autonomy reason">
                 <span className="text-muted-foreground">{detail.data.mode_reason ?? "—"}</span>
               </Field>
               <Field label="Summary">{detail.data.summary ?? "—"}</Field>
-              <Field label="Suggested customer reply (PII-masked)">
-                <span className="italic text-muted-foreground">{detail.data.suggested_customer_reply || "—"}</span>
+              <Field label={actionable ? "Customer reply (edit — this is what the client sees)" : "Customer reply sent"}>
+                {actionable ? (
+                  <textarea
+                    value={customerReply ?? ""}
+                    onChange={(e) => setCustomerReply(e.target.value)}
+                    rows={5}
+                    placeholder="Write the message the customer will receive…"
+                    className="w-full resize-y rounded-lg border border-input bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap text-muted-foreground">
+                    {detail.data.final_customer_reply || detail.data.suggested_customer_reply || "—"}
+                  </p>
+                )}
               </Field>
               <Field label={actionable ? "Developer remediation (edit to correct = the gold answer)" : "Developer remediation"}>
                 {actionable ? (

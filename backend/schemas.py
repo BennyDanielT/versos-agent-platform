@@ -10,7 +10,12 @@ class ReviewReq(BaseModel):
     decision: str                       # approve | reject
     reviewer: str
     final_remediation: list[str] | None = None
+    final_customer_reply: str | None = None   # dev's edited customer-facing reply (what goes out)
     review_comment: str = ""
+
+
+class EscalateReq(BaseModel):
+    followup: str | None = None         # optional client message when re-opening after a reply
 
 
 class PolicyReq(BaseModel):

@@ -49,7 +49,10 @@ export const api = {
 
   review: (
     id: number,
-    body: { decision: string; reviewer: string; review_comment: string; final_remediation?: string[] },
+    body: {
+      decision: string; reviewer: string; review_comment: string;
+      final_remediation?: string[]; final_customer_reply?: string;
+    },
   ) =>
     req<{ status: string }>(`tickets/${id}/review`, {
       method: "POST",
@@ -61,8 +64,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ satisfied }),
     }),
-  escalate: (id: number) =>
-    req<{ status: string }>(`tickets/${id}/escalate`, { method: "POST", body: "{}" }),
+  escalate: (id: number, followup?: string) =>
+    req<{ status: string }>(`tickets/${id}/escalate`, {
+      method: "POST",
+      body: JSON.stringify({ followup: followup ?? null }),
+    }),
 
   policy: () => req<PolicyRow[]>("policy"),
   upsertPolicy: (body: PolicyRow & { updated_by: string }) =>
