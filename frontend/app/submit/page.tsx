@@ -178,16 +178,41 @@ function SRView({ id }: { id: number }) {
   if (detail.isError) return <ErrorBox error={detail.error} />;
   const t = detail.data!;
   const reviewed = t.decision === "approve";
-  const isAuto = t.recommended_mode === "auto" && !reviewed;
+  const rejected = t.decision === "reject";
+  const isAuto = t.recommended_mode === "auto" && !reviewed && !rejected;
   // The message that actually goes to the customer: the specialist's edit, else the model's draft.
   const reply = t.final_customer_reply || t.suggested_customer_reply || "—";
   // Re-opened: there's a prior specialist reply but it's back in the queue awaiting another look.
-  const reopened = !reviewed && !isAuto && !!t.final_customer_reply;
+  const reopened = !reviewed && !rejected && !isAuto && !!t.final_customer_reply;
 
   return (
-    <Card className={cn(reviewed ? "border-emerald-500/40 bg-emerald-500/10" : isAuto ? "border-border" : "border-blue-500/40 bg-blue-500/10")}>
+    <Card
+      className={cn(
+        reviewed
+          ? "border-emerald-500/40 bg-emerald-500/10"
+          : rejected
+            ? "border-red-500/40 bg-red-500/10"
+            : isAuto
+              ? "border-border"
+              : "border-blue-500/40 bg-blue-500/10",
+      )}
+    >
       <CardBody className="space-y-3">
-        {reviewed ? (
+        {rejected ? (
+          <>
+            <div className="text-sm font-semibold">Request reviewed — closed (rejected)</div>
+            <p className="text-sm text-muted-foreground">
+              A specialist reviewed this request and closed it. If you think this was a mistake, add
+              any detail below and we&apos;ll take another look.
+            </p>
+            <EscalateBox
+              prompt="Disagree with this outcome? Add context and we'll re-open it."
+              cta="Re-open request"
+              pending={escalate.isPending}
+              onSend={(msg) => escalate.mutate(msg)}
+            />
+          </>
+        ) : reviewed ? (
           <>
             <div className="text-sm font-semibold">A specialist has responded</div>
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">{reply}</p>
