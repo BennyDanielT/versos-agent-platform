@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { LearnDrawer } from "@/components/learn-drawer";
 import {
   Button,
   Card,
@@ -26,6 +28,7 @@ const REVIEWER = "ops@versos";
 
 export default function IndexHygienePage() {
   const qc = useQueryClient();
+  const [learnOpen, setLearnOpen] = useState(false);
   const findings = useQuery({ queryKey: ["findings"], queryFn: () => api.indexFindings(100) });
   const metrics = useQuery({ queryKey: ["index-metrics"], queryFn: () => api.indexMetrics() });
 
@@ -57,6 +60,9 @@ export default function IndexHygienePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLearnOpen((o) => !o)}>
+            📖 Learn
+          </Button>
           <Button variant="outline" onClick={() => scan.mutate()} disabled={scan.isPending}>
             {scan.isPending ? "Scanning…" : "Run scan"}
           </Button>
@@ -65,6 +71,10 @@ export default function IndexHygienePage() {
           </Button>
         </div>
       </header>
+
+      <LearnDrawer open={learnOpen} onClose={() => setLearnOpen(false)} title="Index Hygiene — study notes">
+        <IndexHygieneNotes />
+      </LearnDrawer>
 
       {(scan.isError || apply.isError) && <ErrorBox error={scan.error ?? apply.error} />}
 
@@ -178,4 +188,130 @@ function fmtBytes(n: number): string {
 function maxReCreate(rows: { re_create_rate: number | null }[]): number {
   const r = Math.max(0, ...rows.map((x) => Number(x.re_create_rate ?? 0)));
   return Math.round(r * 100);
+}
+
+// ---------------------------------------------------------------------------
+// Study notes — grows lesson by lesson. Doubles as demo talking points.
+// ---------------------------------------------------------------------------
+function Lesson({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold">
+        <span className="mr-2 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">Lesson {n}</span>
+        {title}
+      </h3>
+      <div className="mt-2 space-y-2 text-sm text-muted-foreground">{children}</div>
+    </section>
+  );
+}
+
+function IndexHygieneNotes() {
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        The system doesn&apos;t watch 3 specific tables — it inspects <b>every</b> table via Postgres&apos;s
+        internal bookkeeping. Notes build up here as we go.
+      </p>
+
+      <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <div className="mb-1 font-semibold text-foreground">Where&apos;s the &quot;agent&quot;? (agentic ≠ LLM)</div>
+        <p>
+          An agent = <b>sense → decide → act</b>, autonomously — an LLM is only one way to do the
+          &quot;decide&quot; step. Here the agent (<code>scan_indexes</code>) <b>senses</b> by running catalog
+          SQL, <b>decides</b> via risk + the policy gate, and <b>acts</b> by running DDL. The SQL is the
+          agent&apos;s senses; no LLM anywhere. All three verticals share this spine but use different
+          reasoning engines: triage → LLM, index → SQL, pipeline → state machine.
+        </p>
+      </div>
+
+      <Lesson n={1} title="What an index is & why hygiene matters">
+        <p>
+          An index is like the <b>index at the back of a textbook</b>. Without it, to find every mention
+          of a word you read all 900 pages (a <b>sequential scan</b>). With it, you flip to the back and
+          jump straight to the right pages (an <b>index scan</b>) — much faster.
+        </p>
+        <p>But indexes aren&apos;t free — they&apos;re a <b>trade-off</b>:</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>✅ faster <b>reads</b></li>
+          <li>❌ cost <b>disk space</b> (a sorted copy of the column)</li>
+          <li>❌ slow down <b>writes</b> — every INSERT/UPDATE must update every index too</li>
+        </ul>
+        <p>
+          So a healthy database has <b>exactly the indexes it needs</b> — no more, no less. Over time
+          that drifts into four problems:
+        </p>
+        <ul className="space-y-1">
+          <li><b>unused</b> — nobody queries it → pure cost, no benefit.</li>
+          <li><b>missing</b> — a big table queried with no index → slow reads.</li>
+          <li><b>duplicate</b> — two indexes do the same job → double write cost.</li>
+          <li><b>invalid</b> — a failed build left a broken stub taking up space.</li>
+        </ul>
+        <p className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Demo line:</b> &quot;An index trades slower writes and disk for faster reads. Index hygiene
+          keeps that set clean — it finds the four kinds of bad index and fixes them.&quot;
+        </p>
+      </Lesson>
+
+      <Lesson n={2} title="Detecting 'unused' (+ the 7-day trick)">
+        <p>
+          Postgres keeps its own stats. <code>pg_stat_user_indexes.idx_scan</code> = how many times an
+          index has actually been used. The agent just <b>reads</b> that counter — no guessing.
+        </p>
+        <p>Naive rule: <b>unused = <code>idx_scan = 0</code></b> (never used → pure cost → drop it).</p>
+        <p>
+          <b>The trap:</b> a brand-new index <i>also</i> shows 0 scans — nobody&apos;s used it <i>yet</i>.
+          Drop everything at 0 and you&apos;d kill a good index someone just made.
+        </p>
+        <p>
+          <b>The fix — an observation window.</b> A bookkeeping table (<code>index_seen</code>) records
+          when each index was <b>first seen</b>. Real rule:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li><code>idx_scan = 0</code> — never used</li>
+          <li><b>AND</b> watched ≥ 7 days — old enough to trust (newborns get a grace period)</li>
+          <li><b>AND</b> not unique/primary — those enforce <i>correctness</i>, not speed; never drop them</li>
+        </ul>
+        <p className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Demo line:</b> &quot;&apos;Unused&apos; isn&apos;t just zero scans — a new index has zero scans too. So I
+          watch each index for 7 days before trusting that verdict, and I never touch unique/primary
+          indexes because those enforce correctness, not speed.&quot;
+        </p>
+      </Lesson>
+
+      <section>
+        <h3 className="text-sm font-semibold">The pipeline, end-to-end (no LLM)</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Trigger = the <b>Run scan</b> button or the simulator&apos;s periodic loop. Then:
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+          <li><b>Observe</b> — record every current index in <code>index_seen</code> (starts the 7-day clock).</li>
+          <li><b>Detect</b> — 4 SQL queries on Postgres catalogs → findings (facts).</li>
+          <li><b>Risk-rate</b> — size / row thresholds → low or medium.</li>
+          <li><b>Gate</b> — policy table + kill switch + &quot;DROP never auto&quot; → autonomy mode.</li>
+          <li><b>Log</b> — write findings to <code>index_findings</code>.</li>
+          <li><b>Review</b> — a human approves / rejects.</li>
+          <li><b>Apply</b> — run the real DDL for eligible findings; record the outcome.</li>
+          <li><b>Measure</b> — re-create rate (below).</li>
+        </ol>
+        <p className="mt-2 rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Key point:</b> every decision is a <b>fact</b> (catalog), a <b>rule</b> (threshold), or a
+          <b> human</b> (review) — <b>never a model&apos;s guess</b>. No LLM, no inference. The
+          &quot;intelligence&quot; is encoded expertise: which catalog columns reveal each problem, and
+          which actions are safe.
+        </p>
+      </section>
+
+      <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <div className="mb-1 font-semibold text-foreground">Metric: re-create rate (the &quot;oops&quot; signal)</div>
+        <p>
+          Of the indexes the agent <b>dropped</b>, the fraction that had to be <b>created again</b> —
+          because the drop turned out to be a mistake (a query got slow). <b>~0</b> = its &quot;unused&quot;
+          calls were right; <b>high</b> = it&apos;s dropping indexes people needed. Must be near 0 before you
+          trust <code>auto</code>-drop — autonomy earned by a measured track record, like CSAT for triage.
+        </p>
+      </div>
+
+      <p className="text-xs italic text-muted-foreground">More lessons coming as we go…</p>
+    </>
+  );
 }
