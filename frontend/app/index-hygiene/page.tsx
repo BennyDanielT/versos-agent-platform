@@ -213,6 +213,17 @@ function IndexHygieneNotes() {
         internal bookkeeping. Notes build up here as we go.
       </p>
 
+      <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <div className="mb-1 font-semibold text-foreground">Where&apos;s the &quot;agent&quot;? (agentic ≠ LLM)</div>
+        <p>
+          An agent = <b>sense → decide → act</b>, autonomously — an LLM is only one way to do the
+          &quot;decide&quot; step. Here the agent (<code>scan_indexes</code>) <b>senses</b> by running catalog
+          SQL, <b>decides</b> via risk + the policy gate, and <b>acts</b> by running DDL. The SQL is the
+          agent&apos;s senses; no LLM anywhere. All three verticals share this spine but use different
+          reasoning engines: triage → LLM, index → SQL, pipeline → state machine.
+        </p>
+      </div>
+
       <Lesson n={1} title="What an index is & why hygiene matters">
         <p>
           An index is like the <b>index at the back of a textbook</b>. Without it, to find every mention
@@ -238,6 +249,32 @@ function IndexHygieneNotes() {
         <p className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
           <b>Demo line:</b> &quot;An index trades slower writes and disk for faster reads. Index hygiene
           keeps that set clean — it finds the four kinds of bad index and fixes them.&quot;
+        </p>
+      </Lesson>
+
+      <Lesson n={2} title="Detecting 'unused' (+ the 7-day trick)">
+        <p>
+          Postgres keeps its own stats. <code>pg_stat_user_indexes.idx_scan</code> = how many times an
+          index has actually been used. The agent just <b>reads</b> that counter — no guessing.
+        </p>
+        <p>Naive rule: <b>unused = <code>idx_scan = 0</code></b> (never used → pure cost → drop it).</p>
+        <p>
+          <b>The trap:</b> a brand-new index <i>also</i> shows 0 scans — nobody&apos;s used it <i>yet</i>.
+          Drop everything at 0 and you&apos;d kill a good index someone just made.
+        </p>
+        <p>
+          <b>The fix — an observation window.</b> A bookkeeping table (<code>index_seen</code>) records
+          when each index was <b>first seen</b>. Real rule:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li><code>idx_scan = 0</code> — never used</li>
+          <li><b>AND</b> watched ≥ 7 days — old enough to trust (newborns get a grace period)</li>
+          <li><b>AND</b> not unique/primary — those enforce <i>correctness</i>, not speed; never drop them</li>
+        </ul>
+        <p className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Demo line:</b> &quot;&apos;Unused&apos; isn&apos;t just zero scans — a new index has zero scans too. So I
+          watch each index for 7 days before trusting that verdict, and I never touch unique/primary
+          indexes because those enforce correctness, not speed.&quot;
         </p>
       </Lesson>
 
