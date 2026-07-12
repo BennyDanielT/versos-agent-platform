@@ -77,6 +77,7 @@ export default function PolicyPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Segment metrics</h2>
+        <MetricsLegend />
         {metrics.isPending && <Loading label="Loading metrics…" />}
         {metrics.isError && <ErrorBox error={metrics.error} />}
         {metrics.data?.length === 0 && <Empty label="No metrics yet." />}
@@ -104,6 +105,59 @@ export default function PolicyPage() {
         )}
       </section>
     </div>
+  );
+}
+
+// Collapsible glossary: every metric, its formula, and why it matters. Lives here so it
+// can be pointed at during a demo. Confidence bar = the segment's policy min_confidence.
+function MetricsLegend() {
+  const rows: { m: string; formula: string; why: string }[] = [
+    { m: "total", formula: "count(tickets in segment)", why: "Volume — is there enough signal to trust any rate?" },
+    { m: "reviewed", formula: "count(decision IS NOT NULL)", why: "Tickets a human judged — approve OR reject both count as reviewed." },
+    { m: "approved", formula: "count(decision = 'approve')", why: "Of reviewed, how many the human agreed with." },
+    { m: "accept_rate", formula: "approved / reviewed", why: "Online accuracy on reviewed tickets. Auto tickets are excluded (no decision)." },
+    { m: "reviewed_eligible", formula: "reviewed tickets with confidence ≥ bar", why: "Size of the confident slice we'd actually let auto-act." },
+    { m: "precision_eligible", formula: "approved / reviewed, within confidence ≥ bar", why: "Accuracy on the slice that would auto — THE gate for granting auto." },
+    { m: "feedback", formula: "count(customer_satisfied IS NOT NULL)", why: "How many CSAT responses arrived (the auto-path signal volume)." },
+    { m: "satisfaction_rate", formula: "👍 / feedback", why: "Auto-mode ground truth — auto tickets are never reviewed, so CSAT is their only accuracy signal." },
+    { m: "eligible_for_auto", formula: "reviewed_eligible ≥ 3 AND accept_rate ≥ 0.66 AND precision_eligible ≥ 0.66", why: "Promotion readiness (demo thresholds; prod ≈ 20 / 0.95 / 0.97). Says whether the data justifies auto." },
+    { m: "ECE (calibration)", formula: "Σ(n·|avg_confidence − accuracy|) / Σn, over 10 confidence bins", why: "Is the model's confidence honest? Lower = better calibrated. Tells you where to set the bar." },
+  ];
+  return (
+    <details className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
+      <summary className="cursor-pointer font-medium text-zinc-700">How to read these metrics</summary>
+      <div className="mt-3 space-y-3">
+        <p className="text-xs text-zinc-500">
+          Two ground truths, on purpose: <b>accept-rate / precision</b> measure the <b>reviewed</b> path
+          (a human approved/rejected); <b>satisfaction-rate</b> measures the <b>auto</b> path (no human,
+          so the customer is the judge). <b>bar</b> = the segment&apos;s policy <code>min_confidence</code>.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left text-zinc-400">
+              <tr>
+                <th className="py-1 pr-3">Metric</th>
+                <th className="py-1 pr-3">Formula</th>
+                <th className="py-1">Why it matters</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.m} className="border-t border-zinc-100 align-top">
+                  <td className="py-1.5 pr-3 font-medium text-zinc-700">{r.m}</td>
+                  <td className="py-1.5 pr-3 font-mono text-[11px] text-zinc-600">{r.formula}</td>
+                  <td className="py-1.5 text-zinc-500">{r.why}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-zinc-500">
+          The loop: metrics <b>surface</b> a segment → readiness says if auto is <b>earned</b> → a human
+          <b> grants</b> it (Promote / Add segment) → code <b>enforces</b> the ceiling.
+        </p>
+      </div>
+    </details>
   );
 }
 
