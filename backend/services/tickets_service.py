@@ -28,7 +28,9 @@ async def get_ticket(pool: asyncpg.Pool, ticket_id: int) -> dict | None:
 
 
 async def segment_metrics(pool: asyncpg.Pool) -> list[dict]:
-    rows = await pool.fetch("SELECT * FROM segment_metrics")
+    # promotion_readiness = segment_metrics + the eligible_for_auto flag (volume + accept-rate
+    # + precision rule). Superset, so the UI gets the metrics AND the promotion signal.
+    rows = await pool.fetch("SELECT * FROM promotion_readiness")
     return [dict(r) for r in rows]
 
 

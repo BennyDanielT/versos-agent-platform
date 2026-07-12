@@ -115,11 +115,14 @@ ORDER BY l.severity, l.category;
 
 -- Promotion readiness: applies the flip rule. A human promotes a segment to `auto`
 -- only when it clears volume + accept-rate + precision bars (thresholds are knobs).
+-- DEMO-relaxed thresholds so a segment becomes eligible after a few reviews.
+-- Production values would be closer to (20, 0.95, 0.97). Kept in sync with
+-- backend/migrate.py::_ADDITIVE, which re-creates this view on every boot.
 CREATE OR REPLACE VIEW promotion_readiness AS
 SELECT *,
-       (reviewed_eligible >= 20
-        AND accept_rate >= 0.95
-        AND precision_eligible >= 0.97)  AS eligible_for_auto
+       (reviewed_eligible >= 3
+        AND accept_rate >= 0.66
+        AND precision_eligible >= 0.66)  AS eligible_for_auto
 FROM segment_metrics;
 
 -- ---------------------------------------------------------------------------
