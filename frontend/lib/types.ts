@@ -70,6 +70,7 @@ export interface SegmentMetric {
   category: string;
   total: number;
   auto_rate?: number;
+  eligible_for_auto?: boolean;        // from promotion_readiness (volume + accept-rate + precision)
   [k: string]: unknown;               // metrics view is wide; render defensively
 }
 

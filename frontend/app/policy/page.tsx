@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Empty, ErrorBox, Loading, ModeBadge } from "@/components/ui";
-import type { AutonomyMode, PolicyRow, Severity } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import type { AutonomyMode, PolicyRow, SegmentMetric, Severity } from "@/lib/types";
 
 const MODES: AutonomyMode[] = ["suggest", "approved", "auto"];
 const SEVERITIES: Severity[] = ["low", "medium", "high", "critical"];
@@ -82,25 +83,91 @@ export default function PolicyPage() {
         {metrics.data && metrics.data.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {metrics.data.map((m, i) => (
-              <div key={i} className="rounded-lg border border-zinc-200 bg-white p-3">
-                <div className="text-sm font-medium">
-                  {m.severity} · {m.category}
-                </div>
-                <dl className="mt-2 space-y-1 text-xs text-zinc-500">
-                  {Object.entries(m)
-                    .filter(([k]) => !["severity", "category"].includes(k))
-                    .map(([k, v]) => (
-                      <div key={k} className="flex justify-between">
-                        <dt>{k}</dt>
-                        <dd className="tabular-nums text-zinc-700">{String(v)}</dd>
-                      </div>
-                    ))}
-                </dl>
-              </div>
+              <MetricCard
+                key={i}
+                m={m}
+                policyRow={policy.data?.find(
+                  (p) => p.severity === m.severity && p.category === m.category,
+                )}
+                onPromote={(bar) =>
+                  save.mutate({
+                    severity: m.severity,
+                    category: m.category,
+                    approved_mode: "auto",
+                    min_confidence: bar,
+                  })
+                }
+                saving={save.isPending}
+              />
             ))}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// One segment's online-eval metrics + the promote-to-auto action. eligible_for_auto comes
+// from the promotion_readiness view (≥20 reviewed-eligible, ≥0.95 accept, ≥0.97 precision).
+// Promotion is still a human click — the flag just says whether the data justifies it.
+function MetricCard({
+  m,
+  policyRow,
+  onPromote,
+  saving,
+}: {
+  m: SegmentMetric;
+  policyRow?: PolicyRow;
+  onPromote: (bar: number) => void;
+  saving: boolean;
+}) {
+  const eligible = m.eligible_for_auto === true;
+  const isAuto = policyRow?.approved_mode === "auto";
+  const bar = policyRow?.min_confidence ?? 0.85;   // keep the segment's bar (or the view's default)
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium">{m.severity} · {m.category}</div>
+        {isAuto ? (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">auto</span>
+        ) : eligible ? (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">✓ ready</span>
+        ) : (
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-medium text-zinc-500">not yet</span>
+        )}
+      </div>
+
+      <dl className="mt-2 space-y-1 text-xs text-zinc-500">
+        {Object.entries(m)
+          .filter(([k]) => !["severity", "category", "eligible_for_auto"].includes(k))
+          .map(([k, v]) => (
+            <div key={k} className="flex justify-between">
+              <dt>{k}</dt>
+              <dd className="tabular-nums text-zinc-700">{v == null ? "—" : String(v)}</dd>
+            </div>
+          ))}
+      </dl>
+
+      {!isAuto && (
+        <div className="mt-3">
+          <button
+            disabled={saving}
+            onClick={() => onPromote(bar)}
+            className={cn(
+              "w-full rounded px-2 py-1.5 text-xs font-medium disabled:opacity-40",
+              eligible ? "bg-emerald-600 text-white" : "border border-zinc-300 text-zinc-600",
+            )}
+          >
+            {eligible ? "Promote to auto" : "Promote to auto (override — not yet eligible)"}
+          </button>
+          {!eligible && (
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Readiness: ≥20 reviewed-eligible, ≥95% accept, ≥97% precision.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
