@@ -278,6 +278,39 @@ function IndexHygieneNotes() {
         </p>
       </Lesson>
 
+      <section>
+        <h3 className="text-sm font-semibold">The pipeline, end-to-end (no LLM)</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Trigger = the <b>Run scan</b> button or the simulator&apos;s periodic loop. Then:
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+          <li><b>Observe</b> — record every current index in <code>index_seen</code> (starts the 7-day clock).</li>
+          <li><b>Detect</b> — 4 SQL queries on Postgres catalogs → findings (facts).</li>
+          <li><b>Risk-rate</b> — size / row thresholds → low or medium.</li>
+          <li><b>Gate</b> — policy table + kill switch + &quot;DROP never auto&quot; → autonomy mode.</li>
+          <li><b>Log</b> — write findings to <code>index_findings</code>.</li>
+          <li><b>Review</b> — a human approves / rejects.</li>
+          <li><b>Apply</b> — run the real DDL for eligible findings; record the outcome.</li>
+          <li><b>Measure</b> — re-create rate (below).</li>
+        </ol>
+        <p className="mt-2 rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Key point:</b> every decision is a <b>fact</b> (catalog), a <b>rule</b> (threshold), or a
+          <b> human</b> (review) — <b>never a model&apos;s guess</b>. No LLM, no inference. The
+          &quot;intelligence&quot; is encoded expertise: which catalog columns reveal each problem, and
+          which actions are safe.
+        </p>
+      </section>
+
+      <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <div className="mb-1 font-semibold text-foreground">Metric: re-create rate (the &quot;oops&quot; signal)</div>
+        <p>
+          Of the indexes the agent <b>dropped</b>, the fraction that had to be <b>created again</b> —
+          because the drop turned out to be a mistake (a query got slow). <b>~0</b> = its &quot;unused&quot;
+          calls were right; <b>high</b> = it&apos;s dropping indexes people needed. Must be near 0 before you
+          trust <code>auto</code>-drop — autonomy earned by a measured track record, like CSAT for triage.
+        </p>
+      </div>
+
       <p className="text-xs italic text-muted-foreground">More lessons coming as we go…</p>
     </>
   );
