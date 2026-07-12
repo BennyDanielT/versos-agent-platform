@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { LearnDrawer } from "@/components/learn-drawer";
 import {
   Button,
   Card,
@@ -26,6 +28,7 @@ const REVIEWER = "ops@versos";
 
 export default function IndexHygienePage() {
   const qc = useQueryClient();
+  const [learnOpen, setLearnOpen] = useState(false);
   const findings = useQuery({ queryKey: ["findings"], queryFn: () => api.indexFindings(100) });
   const metrics = useQuery({ queryKey: ["index-metrics"], queryFn: () => api.indexMetrics() });
 
@@ -57,6 +60,9 @@ export default function IndexHygienePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLearnOpen((o) => !o)}>
+            📖 Learn
+          </Button>
           <Button variant="outline" onClick={() => scan.mutate()} disabled={scan.isPending}>
             {scan.isPending ? "Scanning…" : "Run scan"}
           </Button>
@@ -65,6 +71,10 @@ export default function IndexHygienePage() {
           </Button>
         </div>
       </header>
+
+      <LearnDrawer open={learnOpen} onClose={() => setLearnOpen(false)} title="Index Hygiene — study notes">
+        <IndexHygieneNotes />
+      </LearnDrawer>
 
       {(scan.isError || apply.isError) && <ErrorBox error={scan.error ?? apply.error} />}
 
@@ -178,4 +188,60 @@ function fmtBytes(n: number): string {
 function maxReCreate(rows: { re_create_rate: number | null }[]): number {
   const r = Math.max(0, ...rows.map((x) => Number(x.re_create_rate ?? 0)));
   return Math.round(r * 100);
+}
+
+// ---------------------------------------------------------------------------
+// Study notes — grows lesson by lesson. Doubles as demo talking points.
+// ---------------------------------------------------------------------------
+function Lesson({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold">
+        <span className="mr-2 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">Lesson {n}</span>
+        {title}
+      </h3>
+      <div className="mt-2 space-y-2 text-sm text-muted-foreground">{children}</div>
+    </section>
+  );
+}
+
+function IndexHygieneNotes() {
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        The system doesn&apos;t watch 3 specific tables — it inspects <b>every</b> table via Postgres&apos;s
+        internal bookkeeping. Notes build up here as we go.
+      </p>
+
+      <Lesson n={1} title="What an index is & why hygiene matters">
+        <p>
+          An index is like the <b>index at the back of a textbook</b>. Without it, to find every mention
+          of a word you read all 900 pages (a <b>sequential scan</b>). With it, you flip to the back and
+          jump straight to the right pages (an <b>index scan</b>) — much faster.
+        </p>
+        <p>But indexes aren&apos;t free — they&apos;re a <b>trade-off</b>:</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>✅ faster <b>reads</b></li>
+          <li>❌ cost <b>disk space</b> (a sorted copy of the column)</li>
+          <li>❌ slow down <b>writes</b> — every INSERT/UPDATE must update every index too</li>
+        </ul>
+        <p>
+          So a healthy database has <b>exactly the indexes it needs</b> — no more, no less. Over time
+          that drifts into four problems:
+        </p>
+        <ul className="space-y-1">
+          <li><b>unused</b> — nobody queries it → pure cost, no benefit.</li>
+          <li><b>missing</b> — a big table queried with no index → slow reads.</li>
+          <li><b>duplicate</b> — two indexes do the same job → double write cost.</li>
+          <li><b>invalid</b> — a failed build left a broken stub taking up space.</li>
+        </ul>
+        <p className="rounded-lg border border-border bg-muted/40 p-2 text-xs">
+          <b>Demo line:</b> &quot;An index trades slower writes and disk for faster reads. Index hygiene
+          keeps that set clean — it finds the four kinds of bad index and fixes them.&quot;
+        </p>
+      </Lesson>
+
+      <p className="text-xs italic text-muted-foreground">More lessons coming as we go…</p>
+    </>
+  );
 }
