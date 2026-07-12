@@ -163,7 +163,7 @@ function MetricCard({
           </button>
           {!eligible && (
             <p className="mt-1 text-[11px] text-zinc-400">
-              Readiness: ≥20 reviewed-eligible, ≥95% accept, ≥97% precision.
+              Readiness: ≥3 reviewed-eligible, ≥66% accept, ≥66% precision (demo thresholds).
             </p>
           )}
         </div>

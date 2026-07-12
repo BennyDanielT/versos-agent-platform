@@ -19,6 +19,15 @@ _FILES = ["schema.sql", "index_hygiene.sql", "pipeline_healer.sql"]
 _ADDITIVE = [
     "ALTER TABLE triage_log ADD COLUMN IF NOT EXISTS final_customer_reply TEXT",
     "ALTER TABLE triage_log ADD COLUMN IF NOT EXISTS customer_followup TEXT",
+    # Re-create the promotion view every boot so threshold changes reach the live RDS
+    # (the view is defined in the sentinel-guarded schema.sql, which won't re-run).
+    # DEMO-relaxed thresholds; production would be ~ (20, 0.95, 0.97).
+    """CREATE OR REPLACE VIEW promotion_readiness AS
+       SELECT *,
+              (reviewed_eligible >= 3
+               AND accept_rate >= 0.66
+               AND precision_eligible >= 0.66)  AS eligible_for_auto
+       FROM segment_metrics""",
 ]
 
 
